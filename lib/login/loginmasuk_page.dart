@@ -1,5 +1,7 @@
-import 'package:android/api/loginsystem.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:android/bottom_navbar/bottom_navbar.dart';
+import 'package:android/api/loginsystem.dart';
 
 class LoginmasukPage extends StatefulWidget {
   const LoginmasukPage({super.key});
@@ -37,20 +39,31 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
       _isLoading = true;
     });
 
-    bool success = (await _loginsystem.login(username, password)) as bool;
-
+    final result = await _loginsystem.login(username, password);
     setState(() {
       _isLoading = false;
     });
 
-    if (success) {
-      ScaffoldMessenger.of(
+    if (result['statusCode'] == 200) {
+      final data = result['data'];
+      final token = data['access_token'];
+      final user = data['user'];
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('token', token);
+      await prefs.setString('name', user['name']);
+      await prefs.setInt('user_id', user['id']);
+      await prefs.setString('role', user['role_aktif'] ?? '');
+
+      debugPrint("LOGIN BERHASIL. Pindah ke BottomNavBar...");
+
+      Navigator.pushReplacement(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Login berhasil!')));
-      // Navigasi ke halaman berikutnya jika perlu
+        MaterialPageRoute(builder: (context) => const MyBottomNavBar()),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Username atau Password salah')),
+        SnackBar(content: Text(result['data']['message'] ?? 'Login gagal')),
       );
     }
   }
@@ -71,39 +84,39 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
         ),
         child: SafeArea(
           child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  width: 87,
-                  height: 86,
-                  child: Image.asset('assets/images/logo.png'),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'SELAMAT DATANG',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 30),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 87,
+                    height: 86,
+                    child: Image.asset('assets/images/logo.png'),
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'APLIKASI DOKUMEN & TANDA TANGAN DIGITAL',
-                  style: TextStyle(color: Colors.white, fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'POLITEKNIK NEGERI BANYUWANGI',
-                  style: TextStyle(color: Colors.white, fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 43),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 30),
-                  child: Container(
+                  const SizedBox(height: 24),
+                  const Text(
+                    'SELAMAT DATANG',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'APLIKASI DOKUMEN & TANDA TANGAN DIGITAL',
+                    style: TextStyle(color: Colors.white, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'POLITEKNIK NEGERI BANYUWANGI',
+                    style: TextStyle(color: Colors.white, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 43),
+                  Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
@@ -114,7 +127,6 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                       vertical: 20,
                     ),
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
                         IntrinsicHeight(
                           child: Row(
@@ -123,14 +135,12 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                               Expanded(
                                 child: TextField(
                                   controller: _usernameController,
-                                  decoration: InputDecoration(
+                                  decoration: const InputDecoration(
                                     labelText: 'Username',
                                     border: OutlineInputBorder(
-                                      borderRadius: const BorderRadius.only(
+                                      borderRadius: BorderRadius.only(
                                         topLeft: Radius.circular(8),
                                         bottomLeft: Radius.circular(8),
-                                        topRight: Radius.circular(0),
-                                        bottomRight: Radius.circular(0),
                                       ),
                                     ),
                                   ),
@@ -139,13 +149,8 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                               Container(
                                 width: 48,
                                 decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: Colors.black,
-                                    width: 1,
-                                  ),
+                                  border: Border.all(color: Colors.black),
                                   borderRadius: const BorderRadius.only(
-                                    topLeft: Radius.circular(0),
-                                    bottomLeft: Radius.circular(0),
                                     topRight: Radius.circular(8),
                                     bottomRight: Radius.circular(8),
                                   ),
@@ -168,14 +173,12 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                                 child: TextField(
                                   controller: _passwordController,
                                   obscureText: true,
-                                  decoration: InputDecoration(
+                                  decoration: const InputDecoration(
                                     labelText: 'Password',
                                     border: OutlineInputBorder(
-                                      borderRadius: const BorderRadius.only(
+                                      borderRadius: BorderRadius.only(
                                         topLeft: Radius.circular(8),
                                         bottomLeft: Radius.circular(8),
-                                        topRight: Radius.circular(0),
-                                        bottomRight: Radius.circular(0),
                                       ),
                                     ),
                                   ),
@@ -184,13 +187,8 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                               Container(
                                 width: 48,
                                 decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: Colors.black,
-                                    width: 1,
-                                  ),
+                                  border: Border.all(color: Colors.black),
                                   borderRadius: const BorderRadius.only(
-                                    topLeft: Radius.circular(0),
-                                    bottomLeft: Radius.circular(0),
                                     topRight: Radius.circular(8),
                                     bottomRight: Radius.circular(8),
                                   ),
@@ -232,8 +230,8 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                       ],
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -1,9 +1,9 @@
 import 'package:android/api/datadokumen.dart';
 import 'package:android/lihatsemua.dart';
 import 'package:android/scan_qr/barcode_scanner_page.dart';
-import 'package:android/upload_file/menampilkanpdf.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:android/upload_file/systemupload.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,23 +13,23 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  Future<void> _pickAndOpenPdf() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
+  String name = '';
+  String nip = '';
+  String role = '';
 
-    if (result != null && result.files.single.path != null) {
-      String filePath = result.files.single.path!;
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => PdfViewerPage(filePath: filePath),
-        ),
-      );
-    } else {
-      // user batal pilih file atau tidak memilih file
-    }
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      name = prefs.getString('name') ?? 'Pengguna';
+      nip = prefs.getString('nip') ?? '-';
+      role = prefs.getString('role')?.toUpperCase() ?? '-';
+    });
   }
 
   @override
@@ -67,14 +67,24 @@ class _HomePageState extends State<HomePage> {
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Text(
-                      'Adit',
-                      style: TextStyle(color: Colors.white, fontSize: 24.4),
+                      name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24.4,
+                      ),
                     ),
                     Text(
-                      'MAHASISWA',
-                      style: TextStyle(color: Colors.white, fontSize: 12.2),
+                      role,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.2,
+                      ),
+                    ),
+                    Text(
+                      'NIP/NIM: $nip',
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
                     ),
                   ],
                 ),
@@ -112,13 +122,10 @@ class _HomePageState extends State<HomePage> {
                         );
                       }),
                       buildButton(Icons.upload_file, 'Upload File', () {
-                        _pickAndOpenPdf();
+                        PdfPickerHelper.pickAndOpenPdf(context);
                       }),
-                      buildButton(Icons.verified, 'verifikasi TTD', () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => HomePage()),
-                        );
+                      buildButton(Icons.verified, 'Verifikasi TTD', () {
+                        // ganti HomePage() dengan halaman verifikasi TTD jika ada
                       }),
                     ],
                   ),
@@ -156,7 +163,6 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-
             Container(
               color: Colors.white,
               width: double.infinity,
