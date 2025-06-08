@@ -30,7 +30,7 @@ class PdfPickerHelper {
       }
 
       var uri = Uri.parse(
-        "http://10.0.2.2:8000/api/documents/upload",
+        "http://fakerryugan.my.id/api/documents/upload",
       ); // Ganti dengan API kamu
 
       var request = http.MultipartRequest('POST', uri);
