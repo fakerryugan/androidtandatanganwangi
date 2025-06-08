@@ -122,7 +122,7 @@ class _HomePageState extends State<HomePage> {
                         );
                       }),
                       buildButton(Icons.upload_file, 'Upload File', () {
-                        PdfPickerHelper.pickUploadAndOpenPdf(context);
+                        PdfPickerHelper.pickAndOpenPdf(context);
                       }),
                       buildButton(Icons.verified, 'Verifikasi TTD', () {
                         // ganti HomePage() dengan halaman verifikasi TTD jika ada
