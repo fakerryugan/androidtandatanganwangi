@@ -20,10 +20,23 @@ class _HomePageState extends State<HomePage> {
   List<Map<String, dynamic>> documents = [];
 
   @override
+  @override
   void initState() {
     super.initState();
-    fetchUserInfo();
-    fetchUserDocuments();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final user = await fetchUserInfo();
+    final userDocs = await fetchUserDocuments();
+
+    setState(() {
+      name = user?['name'] ?? 'Pengguna';
+      nip = user?['nip'] ?? '-';
+      role = user?['role_aktif']?.toUpperCase() ?? '-';
+      documents = userDocs;
+      isLoading = false;
+    });
   }
 
   @override
@@ -63,22 +76,18 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name,
+                      '$name',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 24.4,
                       ),
                     ),
                     Text(
-                      role,
+                      '$role',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12.2,
                       ),
-                    ),
-                    Text(
-                      'NIP/NIM: $nip',
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
                     ),
                   ],
                 ),
@@ -173,7 +182,7 @@ class _HomePageState extends State<HomePage> {
                                   Icons.insert_drive_file,
                                   color: Colors.blue,
                                 ),
-                                title: Text(file['encrypted_name'] ?? ''),
+                                title: Text(file['original_name'] ?? ''),
                                 subtitle: Text(
                                   'Diunggah: ${file['uploaded_at'] ?? ''}',
                                 ),
