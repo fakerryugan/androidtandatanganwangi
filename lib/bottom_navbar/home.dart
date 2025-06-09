@@ -1,9 +1,9 @@
-import 'package:android/api/datadokumen.dart';
+import 'package:android/api/token.dart';
+import 'package:flutter/material.dart';
+
 import 'package:android/lihatsemua.dart';
 import 'package:android/scan_qr/barcode_scanner_page.dart';
 import 'package:android/upload_file/systemupload.dart';
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,20 +16,14 @@ class _HomePageState extends State<HomePage> {
   String name = '';
   String nip = '';
   String role = '';
+  bool isLoading = true;
+  List<Map<String, dynamic>> documents = [];
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
-  }
-
-  Future<void> _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      name = prefs.getString('name') ?? 'Pengguna';
-      nip = prefs.getString('nip') ?? '-';
-      role = prefs.getString('role')?.toUpperCase() ?? '-';
-    });
+    fetchUserInfo();
+    fetchUserDocuments();
   }
 
   @override
@@ -125,7 +119,7 @@ class _HomePageState extends State<HomePage> {
                         PdfPickerHelper.pickAndOpenPdf(context);
                       }),
                       buildButton(Icons.verified, 'Verifikasi TTD', () {
-                        // ganti HomePage() dengan halaman verifikasi TTD jika ada
+                        // Tambahkan navigasi verifikasi jika ada
                       }),
                     ],
                   ),
@@ -169,25 +163,36 @@ class _HomePageState extends State<HomePage> {
               constraints: BoxConstraints(
                 minHeight: MediaQuery.of(context).size.height * 0.5,
               ),
-              child: Column(
-                children: dummyFiles.isNotEmpty
-                    ? dummyFiles.take(5).map((file) {
-                        return ListTile(
-                          leading: const Icon(
-                            Icons.insert_drive_file,
-                            color: Colors.blue,
-                          ),
-                          title: Text(file['nama'] ?? ''),
-                          subtitle: Text('Diunggah: ${file['tanggal'] ?? ''}'),
-                          trailing: const Icon(
-                            Icons.arrow_forward_ios,
-                            size: 16,
-                          ),
-                          onTap: () {},
-                        );
-                      }).toList()
-                    : [const SizedBox(height: 200)],
-              ),
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      children: documents.isNotEmpty
+                          ? documents.take(5).map((file) {
+                              return ListTile(
+                                leading: const Icon(
+                                  Icons.insert_drive_file,
+                                  color: Colors.blue,
+                                ),
+                                title: Text(file['encrypted_name'] ?? ''),
+                                subtitle: Text(
+                                  'Diunggah: ${file['uploaded_at'] ?? ''}',
+                                ),
+                                trailing: const Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 16,
+                                ),
+                                onTap: () {
+                                  // Aksi jika ingin membuka dokumen
+                                },
+                              );
+                            }).toList()
+                          : const [
+                              Padding(
+                                padding: EdgeInsets.all(20.0),
+                                child: Text('Belum ada dokumen yang diunggah.'),
+                              ),
+                            ],
+                    ),
             ),
           ],
         ),
