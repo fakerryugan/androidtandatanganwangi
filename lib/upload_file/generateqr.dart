@@ -1,8 +1,4 @@
-import 'package:android/api/dokumen.dart';
-import 'package:android/api/token.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 Future<Map<String, dynamic>?> showInputDialog({
   required BuildContext context,
@@ -10,7 +6,10 @@ Future<Map<String, dynamic>?> showInputDialog({
   required TextEditingController nipController,
   required TextEditingController tujuanController,
   required bool showTujuan,
+  required int totalPages,
 }) async {
+  int selectedPage = 1;
+
   return showDialog<Map<String, dynamic>>(
     context: context,
     builder: (context) => AlertDialog(
@@ -24,13 +23,13 @@ Future<Map<String, dynamic>?> showInputDialog({
             children: [
               const Text(
                 'NIP/NIM',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
               TextFormField(
                 controller: nipController,
                 decoration: const InputDecoration(
-                  hintText: 'NIP/NIM',
+                  hintText: 'Masukkan NIP/NIM',
                   border: OutlineInputBorder(),
                 ),
                 validator: (value) =>
@@ -39,8 +38,8 @@ Future<Map<String, dynamic>?> showInputDialog({
               const SizedBox(height: 12),
               if (showTujuan) ...[
                 const Text(
-                  'Tujuan surat',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  'Tujuan Surat',
+                  style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 6),
                 TextFormField(
@@ -52,7 +51,24 @@ Future<Map<String, dynamic>?> showInputDialog({
                   validator: (value) =>
                       value == null || value.isEmpty ? 'Masukkan tujuan' : null,
                 ),
+                const SizedBox(height: 12),
               ],
+              const Text('Pilih halaman tempat QR akan ditempatkan'),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<int>(
+                value: selectedPage,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+                items: List.generate(
+                  totalPages,
+                  (index) => DropdownMenuItem(
+                    value: index + 1,
+                    child: Text('Halaman ${index + 1}'),
+                  ),
+                ),
+                onChanged: (value) {
+                  if (value != null) selectedPage = value;
+                },
+              ),
             ],
           ),
         ),
@@ -63,54 +79,22 @@ Future<Map<String, dynamic>?> showInputDialog({
           child: const Text('Batal'),
         ),
         ElevatedButton(
-          onPressed: () async {
+          onPressed: () {
             if (formKey.currentState!.validate()) {
-              final nip = nipController.text.trim();
-              final alasan = tujuanController.text.trim();
-              final documentId = await DocumentInfo.getDocumentId();
-              final token = await getToken();
+              final nip = nipController.text;
+              final tujuan = tujuanController.text;
 
-              if (documentId == null || token == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Dokumen belum ditemukan')),
-                );
-                return;
-              }
+              // TODO: Ganti generate link QR di sini
+              final encryptedLink =
+                  '$nip-$tujuan-${DateTime.now().millisecondsSinceEpoch}';
 
-              final url = Uri.parse(
-                '$baseUrl/documents/$documentId/add-signer',
-              );
-              try {
-                final body = {'nip': nip, if (showTujuan) 'alasan': alasan};
-                final response = await http.post(
-                  url,
-                  headers: {
-                    'Authorization': 'Bearer $token',
-                    'Content-Type': 'application/json',
-                  },
-                  body: jsonEncode(body),
-                );
+              Navigator.pop(context, {
+                'encrypted_link': encryptedLink,
+                'selected_page': selectedPage - 1, // zero-based index
+              });
 
-                final responseData = jsonDecode(response.body);
-
-                if (response.statusCode == 200) {
-                  Navigator.pop(context, responseData);
-                  nipController.clear();
-                  if (showTujuan) tujuanController.clear();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        responseData['message'] ?? 'Gagal menambahkan',
-                      ),
-                    ),
-                  );
-                }
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Terjadi kesalahan: $e')),
-                );
-              }
+              nipController.clear();
+              tujuanController.clear();
             }
           },
           child: const Text('Generate QR'),
