@@ -24,7 +24,9 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   final _formKey = GlobalKey<FormState>();
 
   String? currentQrData;
+  Offset? qrPosition;
   bool waitingForTap = false;
+  bool qrLocked = false;
 
   @override
   void dispose() {
@@ -44,42 +46,91 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         centerTitle: true,
         leading: const SizedBox(),
       ),
-      body: GestureDetector(
-        onTapDown: (details) async {
-          if (waitingForTap && currentQrData != null) {
-            final renderBox =
-                _pdfViewerKey.currentContext!.findRenderObject() as RenderBox;
-            final localPosition = renderBox.globalToLocal(
-              details.globalPosition,
-            );
-            final adjustedOffset = Offset(
-              localPosition.dx,
-              localPosition.dy - kToolbarHeight,
-            );
+      body: Stack(
+        children: [
+          GestureDetector(
+            onTapDown: (details) {
+              if (waitingForTap && currentQrData != null && !qrLocked) {
+                final renderBox =
+                    _pdfViewerKey.currentContext!.findRenderObject()
+                        as RenderBox;
+                final localPosition = renderBox.globalToLocal(
+                  details.globalPosition,
+                );
+                final adjustedOffset = Offset(
+                  localPosition.dx,
+                  localPosition.dy - kToolbarHeight,
+                );
 
-            final pageNumber = pdfViewerController.pageNumber;
+                setState(() {
+                  qrPosition = adjustedOffset;
+                });
+              }
+            },
+            child: SfPdfViewer.file(
+              file,
+              key: _pdfViewerKey,
+              controller: pdfViewerController,
+            ),
+          ),
+          if (qrPosition != null && currentQrData != null)
+            Positioned(
+              left: qrPosition!.dx,
+              top: qrPosition!.dy,
+              child: GestureDetector(
+                onPanUpdate: (details) {
+                  if (!qrLocked) {
+                    setState(() {
+                      qrPosition = Offset(
+                        qrPosition!.dx + details.delta.dx,
+                        qrPosition!.dy + details.delta.dy,
+                      );
+                    });
+                  }
+                },
+                child: Stack(
+                  alignment: Alignment.topRight,
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      color: Colors.white,
+                      child: QrImageView(
+                        data:
+                            "http://fakerryugan.my.id/api/signature/view-from-payload?payload=$currentQrData",
+                        version: QrVersions.auto,
+                      ),
+                    ),
+                    if (!qrLocked)
+                      IconButton(
+                        icon: const Icon(Icons.lock, color: Colors.black),
+                        onPressed: () async {
+                          final pageNumber = pdfViewerController.pageNumber;
+                          await insertQrToPdfDirectly(
+                            data: currentQrData!,
+                            page: pageNumber,
+                            offset: qrPosition!,
+                          );
 
-            await insertQrToPdfDirectly(
-              data: currentQrData!,
-              page: pageNumber,
-              offset: adjustedOffset,
-            );
+                          setState(() {
+                            qrLocked = true;
+                            waitingForTap = false;
+                            currentQrData = null;
+                            qrPosition = null;
+                          });
 
-            setState(() {
-              currentQrData = null;
-              waitingForTap = false;
-            });
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('QR berhasil disimpan ke PDF')),
-            );
-          }
-        },
-        child: SfPdfViewer.file(
-          file,
-          key: _pdfViewerKey,
-          controller: pdfViewerController,
-        ),
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('QR berhasil disimpan ke PDF'),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        ],
       ),
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 70),
@@ -98,11 +149,14 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               setState(() {
                 currentQrData = result['encrypted_link'];
                 waitingForTap = true;
+                qrLocked = false;
               });
 
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Silakan klik posisi di halaman PDF.'),
+                  content: Text(
+                    'Silakan tap posisi di PDF untuk menambahkan QR.',
+                  ),
                 ),
               );
             }
@@ -155,7 +209,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     await file.writeAsBytes(await document.save());
     document.dispose();
 
-    // Tampilkan PDF yang sudah diupdate
+    // Tampilkan PDF baru
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => PdfViewerPage(filePath: outputPath)),
