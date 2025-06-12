@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:android/api/dokumen.dart';
+import 'package:android/api/token.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -23,7 +26,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
   List<String> qrDataList = [];
   List<Offset> qrPositions = [];
-  List<int> qrPages = []; // Simpan halaman QR
+  List<int> qrPages = [];
 
   late PdfDocument _pdfDocument;
 
@@ -114,16 +117,19 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                               borderRadius: BorderRadius.circular(15),
                             ),
                           ),
-                          icon: const Icon(Icons.send),
-                          label: const Text('Kirim'),
+                          icon: const Icon(Icons.send), // ✅ WAJIB ADA
+                          label: const Text('Kirim'), // ✅ WAJIB ADA
                           onPressed: () async {
-                            await insertQrToPdf();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'PDF berhasil disiapkan untuk upload',
-                                ),
-                              ),
+                            final documentId =
+                                await DocumentInfo.getDocumentId(); // int?
+                            final accessToken = await getToken(); // String?
+                            final signedFilePath =
+                                await insertQrToPdf(); // String
+
+                            await uploadReplacedPdf(
+                              documentId.toString(), // convert int? ke String
+                              accessToken ?? '', // jika null fallback ke kosong
+                              signedFilePath,
                             );
                           },
                         ),
@@ -191,7 +197,10 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     );
   }
 
-  Future<void> insertQrToPdf() async {
+  Future<String> insertQrToPdf() async {
+    final fileBytes = await File(widget.filePath).readAsBytes();
+    final document = PdfDocument(inputBytes: fileBytes);
+
     for (int i = 0; i < qrDataList.length; i++) {
       final qrImage = await QrPainter.withQr(
         qr: QrValidator.validate(
@@ -204,25 +213,54 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         color: const Color(0xFF000000),
         emptyColor: const Color(0xFFFFFFFF),
       ).toImage(200);
+
       final byteData = await qrImage.toByteData(format: ui.ImageByteFormat.png);
       final bytes = byteData!.buffer.asUint8List();
       final pdfImage = PdfBitmap(bytes);
 
-      final page = _pdfDocument.pages[qrPages[i]];
-      final pageSize = page.size;
-      final renderBox = context.findRenderObject() as RenderBox;
-      final viewerSize = renderBox.size;
+      final offset = qrPositions[i];
+      final pageIndex = _pdfViewerController.pageNumber - 1;
 
-      final ratioX = pageSize.width / viewerSize.width;
-      final ratioY = pageSize.height / viewerSize.height;
-      final pdfX = qrPositions[i].dx * ratioX;
-      final pdfY = qrPositions[i].dy * ratioY;
+      final page = document.pages[pageIndex];
+      final pageSize = page.getClientSize();
+
+      final pdfX = offset.dx;
+      final pdfY = pageSize.height - offset.dy - 100;
 
       page.graphics.drawImage(pdfImage, Rect.fromLTWH(pdfX, pdfY, 100, 100));
     }
 
-    final outputPath = '${widget.filePath}_signed.pdf';
-    final file = File(outputPath);
-    await file.writeAsBytes(await _pdfDocument.save());
+    final tempPath = '${widget.filePath}_signed_temp.pdf';
+    final file = File(tempPath);
+    await file.writeAsBytes(await document.save());
+    document.dispose();
+    return tempPath;
+  }
+
+  Future<void> uploadReplacedPdf(
+    String documentId,
+    String accessToken,
+    String filePath,
+  ) async {
+    final uri = Uri.parse(
+      'http://fakerryugan.my.id/api/documents/replace/$documentId',
+    );
+
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['access_token'] = accessToken
+      ..files.add(await http.MultipartFile.fromPath('new_file', filePath));
+
+    final response = await request.send();
+
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Berhasil mengganti PDF di server')),
+      );
+    } else {
+      final respStr = await response.stream.bytesToString();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal upload: $respStr')));
+    }
   }
 }
