@@ -25,6 +25,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   List<Offset> qrPositions = [];
   List<int> qrPages = [];
   List<bool> isLockedList = [];
+  List<double> qrSizes = [];
   int currentPage = 0;
 
   @override
@@ -34,9 +35,12 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       document: pdfx.PdfDocument.openFile(widget.filePath),
     );
     _pdfController.pageListenable.addListener(() {
-      setState(() {
-        currentPage = _pdfController.pageListenable.value;
-      });
+      final newPage = _pdfController.pageListenable.value;
+      if (newPage != currentPage) {
+        setState(() {
+          currentPage = newPage;
+        });
+      }
     });
   }
 
@@ -62,8 +66,28 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         builder: (context, constraints) {
           return Stack(
             children: [
-              pdfx.PdfViewPinch(controller: _pdfController),
-              for (int i = 0; i < qrDataList.length; i++)
+              GestureDetector(
+                onTapDown: (details) {
+                  if (qrDataList.length > qrPositions.length) {
+                    final renderBox = context.findRenderObject() as RenderBox;
+                    final localPosition = renderBox.globalToLocal(
+                      details.globalPosition,
+                    );
+                    final normalizedOffset = Offset(
+                      localPosition.dx / constraints.maxWidth,
+                      localPosition.dy / constraints.maxHeight,
+                    );
+                    setState(() {
+                      qrPositions.add(normalizedOffset);
+                      qrPages.add(currentPage - 1);
+                      isLockedList.add(true);
+                      qrSizes.add(100);
+                    });
+                  }
+                },
+                child: pdfx.PdfViewPinch(controller: _pdfController),
+              ),
+              for (int i = 0; i < qrPositions.length; i++)
                 if (qrPages[i] + 1 == currentPage)
                   Positioned(
                     left: qrPositions[i].dx * constraints.maxWidth,
@@ -71,9 +95,10 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                     child: QrOverlay(
                       data: qrDataList[i],
                       locked: isLockedList[i],
-                      onLock: () => setState(() {
-                        isLockedList[i] = true;
-                      }),
+                      initialSize: qrSizes[i],
+                      onResize: (newSize) =>
+                          setState(() => qrSizes[i] = newSize),
+                      onLock: () => setState(() => isLockedList[i] = true),
                       onDragEnd: (offset) {
                         setState(() {
                           qrPositions[i] = Offset(
@@ -107,9 +132,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               if (result != null && result['encrypted_link'] != null) {
                 setState(() {
                   qrDataList.add(result['encrypted_link']);
-                  qrPositions.add(const Offset(0.2, 0.2));
-                  qrPages.add(currentPage - 1);
-                  isLockedList.add(false);
                 });
               }
             },
@@ -126,7 +148,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      bottomNavigationBar: qrDataList.isNotEmpty
+      bottomNavigationBar: qrPositions.isNotEmpty
           ? BottomAppBar(
               height: 60,
               color: const Color(0xFF172B4C),
