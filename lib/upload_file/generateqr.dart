@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-Future<void> showInputDialog({
+Future<Map<String, dynamic>?> showInputDialog({
   required BuildContext context,
   required GlobalKey<FormState> formKey,
   required TextEditingController nipController,
   required TextEditingController tujuanController,
   required bool showTujuan,
 }) async {
-  return showDialog<void>(
+  return showDialog<Map<String, dynamic>>(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Ditujukan Untuk'),
@@ -80,10 +80,8 @@ Future<void> showInputDialog({
               final url = Uri.parse(
                 '$baseUrl/documents/$documentId/add-signer',
               );
-
               try {
                 final body = {'nip': nip, if (showTujuan) 'alasan': alasan};
-
                 final response = await http.post(
                   url,
                   headers: {
@@ -96,30 +94,14 @@ Future<void> showInputDialog({
                 final responseData = jsonDecode(response.body);
 
                 if (response.statusCode == 200) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        responseData['message'] ?? 'Berhasil ditambahkan',
-                      ),
-                    ),
-                  );
-                  Navigator.pop(context);
+                  Navigator.pop(context, responseData);
                   nipController.clear();
                   if (showTujuan) tujuanController.clear();
-                } else if (response.statusCode == 409) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        responseData['message'] ??
-                            'Penandatangan sudah ditambahkan',
-                      ),
-                    ),
-                  );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Gagal menambahkan: ${responseData['message'] ?? 'Terjadi kesalahan'}',
+                        responseData['message'] ?? 'Gagal menambahkan',
                       ),
                     ),
                   );
@@ -131,7 +113,7 @@ Future<void> showInputDialog({
               }
             }
           },
-          child: const Text('generate qr'),
+          child: const Text('Generate QR'),
         ),
       ],
     ),

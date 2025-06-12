@@ -22,7 +22,6 @@ Future<Map<String, dynamic>?> fetchUserInfo() async {
   if (response.statusCode == 200) {
     return json.decode(response.body);
   } else {
-    print('Gagal ambil data user: ${response.body}');
     return null;
   }
 }
@@ -40,7 +39,6 @@ Future<List<Map<String, dynamic>>> fetchUserDocuments() async {
     final data = json.decode(response.body);
     return List<Map<String, dynamic>>.from(data['documents']);
   } else {
-    print('Gagal ambil dokumen: ${response.body}');
     return [];
   }
 }

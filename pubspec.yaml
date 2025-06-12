@@ -38,6 +38,10 @@ dependencies:
   file_picker: ^10.1.9
   path_provider: ^2.1.5
   shared_preferences: ^2.5.3
+  qr_flutter: ^4.1.0 
+  syncfusion_flutter_pdf: 27.2.5 
+  image: ^4.2.0 
+
 
 dev_dependencies:
   flutter_test:
