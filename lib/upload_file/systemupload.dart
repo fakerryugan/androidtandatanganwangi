@@ -1,15 +1,17 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:android/api/dokumen.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
-import '../upload_file/menampilkanpdf.dart'; // Ganti path ini jika berbeda
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:android/api/token.dart';
+import '../upload_file/menampilkanpdf.dart';
 
 class PdfPickerHelper {
   static Future<void> pickAndOpenPdf(BuildContext context) async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf'],
+      allowedExtensions: ['pdf', 'doc', 'docx'],
     );
 
     if (result != null && result.files.single.path != null) {
@@ -17,10 +19,7 @@ class PdfPickerHelper {
       File file = File(filePath);
 
       try {
-        // Ambil token dari SharedPreferences (yang disimpan saat login)
-        SharedPreferences prefs = await SharedPreferences.getInstance();
-        String? token = prefs.getString('token');
-
+        String? token = await getToken();
         if (token == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -30,17 +29,21 @@ class PdfPickerHelper {
           return;
         }
 
-        var uri = Uri.parse(
-          "http://fakerryugan.my.id/api/documents/upload",
-        ); // Ganti sesuai API-mu
+        var uri = Uri.parse('http://fakerryugan.my.id/api/documents/upload');
         var request = http.MultipartRequest('POST', uri);
         request.headers['Authorization'] = 'Bearer $token';
-
         request.files.add(await http.MultipartFile.fromPath('file', file.path));
 
         var response = await request.send();
 
         if (response.statusCode == 200) {
+          final responseBody = await response.stream.bytesToString();
+          final data = json.decode(responseBody);
+
+          // Simpan document_id dan access_token
+          await DocumentInfo.save(data['document_id'], data['access_token']);
+
+          // Tampilkan halaman PDF Viewer
           Navigator.push(
             context,
             MaterialPageRoute(

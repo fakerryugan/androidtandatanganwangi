@@ -84,6 +84,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               formKey: _formKey,
               nipController: nipController,
               tujuanController: tujuanController,
+              showTujuan: true,
             );
           },
           shape: RoundedRectangleBorder(

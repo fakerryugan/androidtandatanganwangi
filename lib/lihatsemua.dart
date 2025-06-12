@@ -1,9 +1,30 @@
-import 'package:android/api/datadokumen.dart';
+import 'package:android/api/token.dart';
 import 'package:flutter/material.dart';
 
-// ignore: camel_case_types
-class lihatsemuapage extends StatelessWidget {
-  const lihatsemuapage({super.key});
+class LihatSemuaPage extends StatefulWidget {
+  const LihatSemuaPage({super.key});
+
+  @override
+  State<LihatSemuaPage> createState() => _LihatSemuaPageState();
+}
+
+class _LihatSemuaPageState extends State<LihatSemuaPage> {
+  bool isLoading = true;
+  List<Map<String, dynamic>> documents = [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadDocuments();
+  }
+
+  Future<void> loadDocuments() async {
+    final result = await fetchUserDocuments();
+    setState(() {
+      documents = result;
+      isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +77,7 @@ class lihatsemuapage extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+                children: const [
                   Text(
                     'Terbaru',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -67,24 +88,25 @@ class lihatsemuapage extends StatelessWidget {
             Expanded(
               child: Container(
                 color: Colors.white,
-                child: dummyFiles.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'Tidak ada file terbaru',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: dummyFiles.length,
+                width: double.infinity,
+                child: isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : documents.isNotEmpty
+                    ? ListView.builder(
+                        itemCount: documents.length,
                         itemBuilder: (context, index) {
-                          final file = dummyFiles[index];
+                          final file = documents[index];
                           return ListTile(
                             leading: const Icon(
                               Icons.insert_drive_file,
                               color: Colors.blue,
                             ),
-                            title: Text(file['nama']!),
-                            subtitle: Text('Diunggah: ${file['tanggal']}'),
+                            title: Text(
+                              file['original_name'] ?? 'Nama tidak tersedia',
+                            ),
+                            subtitle: Text(
+                              'Diunggah: ${file['uploaded_at'] ?? ''}',
+                            ),
                             trailing: const Icon(
                               Icons.arrow_forward_ios,
                               size: 16,
@@ -92,6 +114,9 @@ class lihatsemuapage extends StatelessWidget {
                             onTap: () {},
                           );
                         },
+                      )
+                    : const Center(
+                        child: Text('Belum ada dokumen yang diunggah.'),
                       ),
               ),
             ),
