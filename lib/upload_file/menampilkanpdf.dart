@@ -24,7 +24,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   final _formKey = GlobalKey<FormState>();
 
   List<String> qrDataList = [];
-  List<Offset> qrPositions = [];
+  List<Offset> qrPositions = []; // stored as ratio (0.0 - 1.0)
   List<int> qrPages = [];
   List<bool> isLockedList = [];
   int currentPage = 0;
@@ -107,8 +107,8 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               for (int i = 0; i < qrDataList.length; i++)
                 if (qrPages[i] + 1 == currentPage)
                   Positioned(
-                    left: qrPositions[i].dx,
-                    top: qrPositions[i].dy,
+                    left: qrPositions[i].dx * constraints.maxWidth,
+                    top: qrPositions[i].dy * constraints.maxHeight,
                     child: isLockedList[i]
                         ? qrWidget(qrDataList[i])
                         : Draggable(
@@ -116,7 +116,10 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                             childWhenDragging: const SizedBox(),
                             onDraggableCanceled: (_, offset) {
                               setState(() {
-                                qrPositions[i] = offset;
+                                qrPositions[i] = Offset(
+                                  offset.dx / constraints.maxWidth,
+                                  offset.dy / constraints.maxHeight,
+                                );
                                 qrPages[i] = currentPage - 1;
                               });
                             },
@@ -145,7 +148,9 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               if (result != null && result['encrypted_link'] != null) {
                 setState(() {
                   qrDataList.add(result['encrypted_link']);
-                  qrPositions.add(const Offset(100, 100));
+                  qrPositions.add(
+                    const Offset(0.2, 0.2),
+                  ); // posisi awal relatif
                   qrPages.add(currentPage - 1);
                   isLockedList.add(false);
                 });
@@ -201,9 +206,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     final fileBytes = await File(widget.filePath).readAsBytes();
     final document = syncfusion.PdfDocument(inputBytes: fileBytes);
 
-    final renderBox = context.findRenderObject() as RenderBox?;
-    final screenSize = renderBox?.size ?? Size.zero;
-
     for (int i = 0; i < qrDataList.length; i++) {
       final qrImage = await QrPainter.withQr(
         qr: QrValidator.validate(
@@ -223,11 +225,9 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final page = document.pages[qrPages[i]];
       final pageSize = page.getClientSize();
 
-      final ratioX = pageSize.width / screenSize.width;
-      final ratioY = pageSize.height / screenSize.height;
-
-      final pdfX = qrPositions[i].dx * ratioX;
-      final pdfY = pageSize.height - (qrPositions[i].dy * ratioY) - 100;
+      final pdfX = qrPositions[i].dx * pageSize.width;
+      final pdfY =
+          pageSize.height - (qrPositions[i].dy * pageSize.height) - 100;
 
       page.graphics.drawImage(pdfImage, Rect.fromLTWH(pdfX, pdfY, 100, 100));
     }
