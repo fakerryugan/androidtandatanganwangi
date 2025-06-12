@@ -1,11 +1,9 @@
 import 'dart:io';
-import 'dart:ui' as ui;
-import 'package:android/api/token.dart';
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'package:qr/qr.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart' as syncfusion;
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter/material.dart';
 
 Future<String> insertQrToPdf({
   required String filePath,
@@ -13,63 +11,67 @@ Future<String> insertQrToPdf({
   required List<Offset> qrPositions,
   required List<int> qrPages,
 }) async {
-  final fileBytes = await File(filePath).readAsBytes();
-  final document = syncfusion.PdfDocument(inputBytes: fileBytes);
+  final file = File(filePath);
+  final bytes = await file.readAsBytes();
+  final document = PdfDocument(inputBytes: bytes);
 
   for (int i = 0; i < qrDataList.length; i++) {
-    final qrImage = await QrPainter.withQr(
-      qr: QrValidator.validate(
-        data: '$baseUrl/signature/view-from-payload?payload=${qrDataList[i]}',
-        version: QrVersions.auto,
-        errorCorrectionLevel: QrErrorCorrectLevel.H,
-      ).qrCode!,
+    final pageIndex = qrPages[i];
+    if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+
+    final page = document.pages[pageIndex];
+
+    final painter = QrPainter(
+      data: qrDataList[i],
+      version: QrVersions.auto,
       gapless: true,
-      color: const Color(0xFF000000),
-      emptyColor: const Color(0xFFFFFFFF),
-    ).toImage(200);
+    );
 
-    final byteData = await qrImage.toByteData(format: ui.ImageByteFormat.png);
-    final bytes = byteData!.buffer.asUint8List();
-    final pdfImage = syncfusion.PdfBitmap(bytes);
+    final picData = await painter.toImageData(300); // resolusi tinggi
+    final image = PdfBitmap(picData!.buffer.asUint8List());
 
-    final page = document.pages[qrPages[i]];
-    final pageSize = page.getClientSize();
+    final size = 100.0; // <-- Ukuran QR code statis
+    final x = qrPositions[i].dx * page.getClientSize().width;
+    final y = qrPositions[i].dy * page.getClientSize().height;
 
-    final pdfX = qrPositions[i].dx * pageSize.width;
-    final pdfY = pageSize.height - (qrPositions[i].dy * pageSize.height) - 100;
-
-    page.graphics.drawImage(pdfImage, Rect.fromLTWH(pdfX, pdfY, 100, 100));
+    page.graphics.drawImage(image, Rect.fromLTWH(x, y, size, size));
   }
 
-  final tempPath = '${filePath}_signed_temp.pdf';
-  final file = File(tempPath);
-  await file.writeAsBytes(await document.save());
+  final output = await getTemporaryDirectory();
+  final outputFile = File(
+    "${output.path}/signed_${DateTime.now().millisecondsSinceEpoch}.pdf",
+  );
+  await outputFile.writeAsBytes(document.save() as List<int>);
   document.dispose();
-  return tempPath;
+
+  return outputFile.path;
 }
 
 Future<void> uploadReplacedPdf(
   String documentId,
-  String accessToken,
+  String token,
   String filePath,
   BuildContext context,
 ) async {
-  final uri = Uri.parse('$baseUrl/documents/replace/$documentId');
+  final uri = Uri.parse('http://fakerryugan.my.id/api/documents/replace');
+  final request = http.MultipartRequest('POST', uri);
 
-  final request = http.MultipartRequest('POST', uri)
-    ..headers['Authorization'] = 'Bearer $accessToken'
-    ..files.add(await http.MultipartFile.fromPath('new_file', filePath));
+  request.fields['document_id'] = documentId;
+  request.headers['Authorization'] = 'Bearer $token';
+
+  final file = await http.MultipartFile.fromPath('file', filePath);
+  request.files.add(file);
 
   final response = await request.send();
 
   if (response.statusCode == 200) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Berhasil mengganti PDF di server')),
+      const SnackBar(content: Text('Dokumen berhasil diperbarui!')),
     );
+    Navigator.of(context).pop(); // Kembali ke halaman sebelumnya
   } else {
-    final respStr = await response.stream.bytesToString();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Gagal upload: $respStr')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Gagal upload. Kode: ${response.statusCode}')),
+    );
   }
 }

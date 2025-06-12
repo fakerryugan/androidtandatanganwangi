@@ -1,10 +1,8 @@
-import 'package:android/system/uploadpdf.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:android/api/dokumen.dart';
 import 'package:android/api/token.dart';
-import 'package:android/upload_file/generateqr.dart';
-import 'package:qr_flutter/qr_flutter.dart';
+import 'package:android/system/uploadpdf.dart';
 
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
@@ -16,15 +14,10 @@ class PdfViewerPage extends StatefulWidget {
 
 class _PdfViewerPageState extends State<PdfViewerPage> {
   late pdfx.PdfControllerPinch _pdfController;
-  final TextEditingController nipController = TextEditingController();
-  final TextEditingController tujuanController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
+  int currentPage = 0;
 
-  List<String> qrDataList = [];
   List<Offset> qrPositions = [];
   List<int> qrPages = [];
-  List<double> qrSizes = [];
-  int currentPage = 0;
 
   @override
   void initState() {
@@ -32,12 +25,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     _pdfController = pdfx.PdfControllerPinch(
       document: pdfx.PdfDocument.openFile(widget.filePath),
     );
+
     _pdfController.pageListenable.addListener(() {
       final newPage = _pdfController.pageListenable.value;
       if (newPage != currentPage) {
-        setState(() {
-          currentPage = newPage;
-        });
+        setState(() => currentPage = newPage);
       }
     });
   }
@@ -45,8 +37,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   @override
   void dispose() {
     _pdfController.dispose();
-    nipController.dispose();
-    tujuanController.dispose();
     super.dispose();
   }
 
@@ -54,11 +44,12 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Tandai Lokasi TTD',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: const Color(0xFF172B4C),
         centerTitle: true,
-        automaticallyImplyLeading: false,
-        leading: Container(),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
@@ -66,45 +57,40 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
             children: [
               GestureDetector(
                 onTapDown: (details) {
-                  if (qrDataList.length > qrPositions.length) {
-                    final renderBox = context.findRenderObject() as RenderBox;
-                    final localPosition = renderBox.globalToLocal(
-                      details.globalPosition,
-                    );
+                  final box = context.findRenderObject() as RenderBox;
+                  final localOffset = box.globalToLocal(details.globalPosition);
 
-                    final normalizedOffset = Offset(
-                      localPosition.dx / constraints.maxWidth,
-                      localPosition.dy / constraints.maxHeight,
-                    );
+                  final normalized = Offset(
+                    localOffset.dx / constraints.maxWidth,
+                    localOffset.dy / constraints.maxHeight,
+                  );
 
-                    setState(() {
-                      qrPositions.add(normalizedOffset);
-                      qrPages.add(currentPage - 1);
-                      qrSizes.add(100);
-                    });
-                  }
+                  setState(() {
+                    qrPositions.add(normalized);
+                    qrPages.add(currentPage - 1);
+                  });
                 },
                 child: pdfx.PdfViewPinch(controller: _pdfController),
               ),
 
-              // Menampilkan QR code statis sesuai halaman dan posisi
+              // Tampilkan penanda posisi QR (tanda kecil)
               for (int i = 0; i < qrPositions.length; i++)
                 if (qrPages[i] + 1 == currentPage)
                   Positioned(
                     left: qrPositions[i].dx * constraints.maxWidth,
                     top: qrPositions[i].dy * constraints.maxHeight,
-                    child: SizedBox(
-                      width: qrSizes[i],
-                      height: qrSizes[i],
-                      child: Material(
-                        elevation: 4,
-                        color: Colors.white,
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: QrImageView(
-                            data: qrDataList[i],
-                            version: QrVersions.auto,
-                          ),
+                    child: Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.7),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.edit_location,
+                          size: 16,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -113,40 +99,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           );
         },
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 10),
-          FloatingActionButton.extended(
-            backgroundColor: Colors.white,
-            onPressed: () async {
-              final result = await showInputDialog(
-                context: context,
-                formKey: _formKey,
-                nipController: nipController,
-                tujuanController: tujuanController,
-                showTujuan: true,
-              );
-
-              if (result != null && result['encrypted_link'] != null) {
-                setState(() {
-                  qrDataList.add(result['encrypted_link']);
-                });
-              }
-            },
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: Colors.black, width: 2),
-            ),
-            label: const Text(
-              '+ Tanda tangan',
-              style: TextStyle(color: Colors.black),
-            ),
-          ),
-          const SizedBox(height: 70),
-        ],
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: qrPositions.isNotEmpty
           ? BottomAppBar(
               height: 60,
@@ -161,20 +113,29 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                     ),
                   ),
                   icon: const Icon(Icons.send),
-                  label: const Text('Kirim'),
+                  label: const Text('Kirim dan Tambah QR'),
                   onPressed: () async {
                     final documentId = await DocumentInfo.getDocumentId();
-                    final accessToken = await getToken();
-                    final signedFilePath = await insertQrToPdf(
+                    final token = await getToken();
+
+                    // QR code isi bisa dibuat per dokumen atau statis sesuai kebutuhan
+                    final List<String> qrDataList = List.generate(
+                      qrPositions.length,
+                      (_) =>
+                          'EncryptedPayloadHere', // ganti sesuai hasil generate
+                    );
+
+                    final signedPath = await insertQrToPdf(
                       filePath: widget.filePath,
                       qrDataList: qrDataList,
                       qrPositions: qrPositions,
                       qrPages: qrPages,
                     );
+
                     await uploadReplacedPdf(
                       documentId.toString(),
-                      accessToken ?? '',
-                      signedFilePath,
+                      token ?? '',
+                      signedPath,
                       context,
                     );
                   },
