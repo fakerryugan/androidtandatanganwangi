@@ -47,10 +47,7 @@ class PdfPickerHelper {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => PdfViewerPage(
-                filePath: filePath,
-                encryptedLink: data['access_token'],
-              ),
+              builder: (context) => PdfViewerPage(filePath: filePath),
             ),
           );
         } else {
