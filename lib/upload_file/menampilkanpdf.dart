@@ -63,22 +63,42 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       ),
       body: Stack(
         children: [
-          SfPdfViewer.file(file, controller: _pdfViewerController),
-          for (int i = 0; i < qrDataList.length; i++)
-            Positioned(
-              left: qrPositions[i].dx,
-              top: qrPositions[i].dy,
-              child: Draggable(
-                feedback: qrWidget(qrDataList[i]),
-                childWhenDragging: const SizedBox(),
-                onDraggableCanceled: (_, offset) {
-                  setState(() {
-                    qrPositions[i] = offset;
-                  });
-                },
-                child: qrWidget(qrDataList[i]),
-              ),
-            ),
+          SfPdfViewer.file(
+            file,
+            controller: _pdfViewerController,
+            onPageChanged: (details) {
+              setState(() {}); // Supaya rebuild saat scroll halaman
+            },
+          ),
+
+          // Hanya tampilkan QR code jika halaman sekarang == halaman target
+          Builder(
+            builder: (context) {
+              final currentPage = _pdfViewerController.pageNumber - 1;
+
+              return Stack(
+                children: List.generate(qrDataList.length, (i) {
+                  if (qrPages[i] != currentPage) return const SizedBox();
+
+                  return Positioned(
+                    left: qrPositions[i].dx,
+                    top: qrPositions[i].dy,
+                    child: Draggable(
+                      feedback: qrWidget(qrDataList[i]),
+                      childWhenDragging: const SizedBox(),
+                      onDraggableCanceled: (_, offset) {
+                        setState(() {
+                          qrPositions[i] = offset;
+                        });
+                      },
+                      child: qrWidget(qrDataList[i]),
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+
           Align(
             alignment: Alignment.bottomCenter,
             child: ClipRRect(
