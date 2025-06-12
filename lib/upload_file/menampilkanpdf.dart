@@ -117,18 +117,17 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                               borderRadius: BorderRadius.circular(15),
                             ),
                           ),
-                          icon: const Icon(Icons.send), // ✅ WAJIB ADA
-                          label: const Text('Kirim'), // ✅ WAJIB ADA
+                          icon: const Icon(Icons.send),
+                          label: const Text('Kirim'),
                           onPressed: () async {
                             final documentId =
-                                await DocumentInfo.getDocumentId(); // int?
-                            final accessToken = await getToken(); // String?
-                            final signedFilePath =
-                                await insertQrToPdf(); // String
+                                await DocumentInfo.getDocumentId();
+                            final accessToken = await getToken();
+                            final signedFilePath = await insertQrToPdf();
 
                             await uploadReplacedPdf(
-                              documentId.toString(), // convert int? ke String
-                              accessToken ?? '', // jika null fallback ke kosong
+                              documentId.toString(),
+                              accessToken ?? '',
                               signedFilePath,
                             );
                           },
@@ -190,8 +189,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         color: Colors.white,
       ),
       child: QrImageView(
-        data:
-            'http://fakerryugan.my.id/api/signature/view-from-payload?payload=$data',
+        data: '$baseUrl/signature/view-from-payload?payload=$data',
         version: QrVersions.auto,
       ),
     );
@@ -204,8 +202,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     for (int i = 0; i < qrDataList.length; i++) {
       final qrImage = await QrPainter.withQr(
         qr: QrValidator.validate(
-          data:
-              'http://fakerryugan.my.id/api/signature/view-from-payload?payload=${qrDataList[i]}',
+          data: '$baseUrl/signature/view-from-payload?payload=${qrDataList[i]}',
           version: QrVersions.auto,
           errorCorrectionLevel: QrErrorCorrectLevel.H,
         ).qrCode!,
@@ -242,9 +239,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     String accessToken,
     String filePath,
   ) async {
-    final uri = Uri.parse(
-      'http://fakerryugan.my.id/api/documents/replace/$documentId',
-    );
+    final uri = Uri.parse('$baseUrl/documents/replace/$documentId');
 
     final request = http.MultipartRequest('POST', uri)
       ..fields['access_token'] = accessToken
