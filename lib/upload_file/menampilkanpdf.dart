@@ -1,7 +1,10 @@
 import 'dart:io';
-import 'package:android/upload_file/generateqr.dart';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:android/upload_file/generateqr.dart'; // Sesuaikan path
 
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
@@ -16,6 +19,10 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   final TextEditingController nipController = TextEditingController();
   final TextEditingController tujuanController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final PdfViewerController _pdfViewerController = PdfViewerController();
+
+  List<String> qrDataList = [];
+  List<Offset> qrPositions = [];
 
   @override
   void dispose() {
@@ -27,6 +34,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   @override
   Widget build(BuildContext context) {
     final file = File(widget.filePath);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit', style: TextStyle(color: Colors.white)),
@@ -37,7 +45,22 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       ),
       body: Stack(
         children: [
-          SfPdfViewer.file(file),
+          SfPdfViewer.file(file, controller: _pdfViewerController),
+          for (int i = 0; i < qrDataList.length; i++)
+            Positioned(
+              left: qrPositions[i].dx,
+              top: qrPositions[i].dy,
+              child: Draggable(
+                feedback: qrWidget(qrDataList[i]),
+                childWhenDragging: const SizedBox(),
+                onDraggableCanceled: (_, offset) {
+                  setState(() {
+                    qrPositions[i] = offset;
+                  });
+                },
+                child: qrWidget(qrDataList[i]),
+              ),
+            ),
           Align(
             alignment: Alignment.bottomCenter,
             child: ClipRRect(
@@ -66,6 +89,25 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                           onPressed: () => Navigator.pop(context),
                         ),
                       ),
+                      const SizedBox(width: 12),
+
+                      if (qrDataList.isNotEmpty)
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF172B4C),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                          ),
+                          icon: const Icon(Icons.send),
+                          label: const Text('Kirim'),
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('wokeee bamgke')),
+                            );
+                          },
+                        ),
                     ],
                   ),
                 ),
@@ -74,30 +116,100 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           ),
         ],
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 60),
-        child: FloatingActionButton.extended(
-          backgroundColor: Colors.white,
-          onPressed: () {
-            showInputDialog(
-              context: context,
-              formKey: _formKey,
-              nipController: nipController,
-              tujuanController: tujuanController,
-              showTujuan: true,
-            );
-          },
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Colors.black, width: 2),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (qrDataList.isNotEmpty)
+            FloatingActionButton.extended(
+              backgroundColor: Colors.green,
+              onPressed: () async {
+                await insertQrToPdf();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('QR berhasil disimpan ke PDF')),
+                );
+              },
+              label: const Text('Simpan ke PDF'),
+              icon: const Icon(Icons.save),
+            ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            backgroundColor: Colors.white,
+            onPressed: () async {
+              final result = await showInputDialog(
+                context: context,
+                formKey: _formKey,
+                nipController: nipController,
+                tujuanController: tujuanController,
+                showTujuan: true,
+              );
+
+              if (result != null && result['encrypted_link'] != null) {
+                setState(() {
+                  qrDataList.add(result['encrypted_link']);
+                  qrPositions.add(const Offset(100, 100));
+                });
+              }
+            },
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: Colors.black, width: 2),
+            ),
+            label: const Text(
+              '+ Tanda tangan',
+              style: TextStyle(color: Colors.black),
+            ),
           ),
-          label: const Text(
-            '+ Tanda tangan',
-            style: TextStyle(color: Colors.black),
-          ),
-        ),
+          const SizedBox(height: 70),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
+  }
+
+  Widget qrWidget(String data) {
+    return Container(
+      width: 100,
+      height: 100,
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.black),
+        color: Colors.white,
+      ),
+      child: QrImageView(
+        data:
+            'http://fakerryugan.my.id/api/signature/view-from-payload?payload=$data',
+        version: QrVersions.auto,
+      ),
+    );
+  }
+
+  Future<void> insertQrToPdf() async {
+    final fileBytes = await File(widget.filePath).readAsBytes();
+    final document = PdfDocument(inputBytes: fileBytes);
+    for (int i = 0; i < qrDataList.length; i++) {
+      final qrImage = await QrPainter.withQr(
+        qr: QrValidator.validate(
+          data:
+              'http://fakerryugan.my.id/api/signature/view-from-payload?payload=${qrDataList[i]}',
+          version: QrVersions.auto,
+          errorCorrectionLevel: QrErrorCorrectLevel.H,
+        ).qrCode!,
+        gapless: true,
+        color: const Color(0xFF000000),
+        emptyColor: const Color(0xFFFFFFFF),
+      ).toImage(200);
+      final byteData = await qrImage.toByteData(format: ui.ImageByteFormat.png);
+      final bytes = byteData!.buffer.asUint8List();
+      final pdfImage = PdfBitmap(bytes);
+      final offset = qrPositions[i];
+      final pageIndex = _pdfViewerController.pageNumber - 1;
+      document.pages[pageIndex].graphics.drawImage(
+        pdfImage,
+        Rect.fromLTWH(offset.dx, offset.dy, 100, 100),
+      );
+    }
+    final outputPath = '${widget.filePath}_signed.pdf';
+    final file = File(outputPath);
+    await file.writeAsBytes(await document.save());
+    document.dispose();
   }
 }
