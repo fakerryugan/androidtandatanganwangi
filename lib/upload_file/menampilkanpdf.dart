@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:android/upload_file/generateqr.dart'; // Sesuaikan path
+import 'package:android/upload_file/generateqr.dart';
 
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
@@ -23,11 +23,26 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
   List<String> qrDataList = [];
   List<Offset> qrPositions = [];
+  List<int> qrPages = []; // Simpan halaman QR
+
+  late PdfDocument _pdfDocument;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPdf();
+  }
+
+  Future<void> _loadPdf() async {
+    final fileBytes = await File(widget.filePath).readAsBytes();
+    _pdfDocument = PdfDocument(inputBytes: fileBytes);
+  }
 
   @override
   void dispose() {
     nipController.dispose();
     tujuanController.dispose();
+    _pdfDocument.dispose();
     super.dispose();
   }
 
@@ -90,7 +105,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                         ),
                       ),
                       const SizedBox(width: 12),
-
                       if (qrDataList.isNotEmpty)
                         ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
@@ -102,9 +116,14 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                           ),
                           icon: const Icon(Icons.send),
                           label: const Text('Kirim'),
-                          onPressed: () {
+                          onPressed: () async {
+                            await insertQrToPdf();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('wokeee bamgke')),
+                              const SnackBar(
+                                content: Text(
+                                  'PDF berhasil disiapkan untuk upload',
+                                ),
+                              ),
                             );
                           },
                         ),
@@ -119,18 +138,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (qrDataList.isNotEmpty)
-            FloatingActionButton.extended(
-              backgroundColor: Colors.green,
-              onPressed: () async {
-                await insertQrToPdf();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('QR berhasil disimpan ke PDF')),
-                );
-              },
-              label: const Text('Simpan ke PDF'),
-              icon: const Icon(Icons.save),
-            ),
           const SizedBox(height: 10),
           FloatingActionButton.extended(
             backgroundColor: Colors.white,
@@ -144,9 +151,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               );
 
               if (result != null && result['encrypted_link'] != null) {
+                final pageNumber = _pdfViewerController.pageNumber - 1;
                 setState(() {
                   qrDataList.add(result['encrypted_link']);
                   qrPositions.add(const Offset(100, 100));
+                  qrPages.add(pageNumber);
                 });
               }
             },
@@ -183,8 +192,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   }
 
   Future<void> insertQrToPdf() async {
-    final fileBytes = await File(widget.filePath).readAsBytes();
-    final document = PdfDocument(inputBytes: fileBytes);
     for (int i = 0; i < qrDataList.length; i++) {
       final qrImage = await QrPainter.withQr(
         qr: QrValidator.validate(
@@ -200,16 +207,22 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final byteData = await qrImage.toByteData(format: ui.ImageByteFormat.png);
       final bytes = byteData!.buffer.asUint8List();
       final pdfImage = PdfBitmap(bytes);
-      final offset = qrPositions[i];
-      final pageIndex = _pdfViewerController.pageNumber - 1;
-      document.pages[pageIndex].graphics.drawImage(
-        pdfImage,
-        Rect.fromLTWH(offset.dx, offset.dy, 100, 100),
-      );
+
+      final page = _pdfDocument.pages[qrPages[i]];
+      final pageSize = page.size;
+      final renderBox = context.findRenderObject() as RenderBox;
+      final viewerSize = renderBox.size;
+
+      final ratioX = pageSize.width / viewerSize.width;
+      final ratioY = pageSize.height / viewerSize.height;
+      final pdfX = qrPositions[i].dx * ratioX;
+      final pdfY = qrPositions[i].dy * ratioY;
+
+      page.graphics.drawImage(pdfImage, Rect.fromLTWH(pdfX, pdfY, 100, 100));
     }
+
     final outputPath = '${widget.filePath}_signed.pdf';
     final file = File(outputPath);
-    await file.writeAsBytes(await document.save());
-    document.dispose();
+    await file.writeAsBytes(await _pdfDocument.save());
   }
 }
