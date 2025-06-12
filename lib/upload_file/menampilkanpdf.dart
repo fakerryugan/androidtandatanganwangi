@@ -199,17 +199,33 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     final pdfImage = PdfBitmap(bytes);
 
     final pageIndex = page - 1;
-    document.pages[pageIndex].graphics.drawImage(
-      pdfImage,
-      Rect.fromLTWH(offset.dx, offset.dy, 100, 100),
-    );
+    final pdfPage = document.pages[pageIndex];
+
+    // ✅ Hitung rasio skala tampilan viewer ke page PDF
+    final viewerBox =
+        _pdfViewerKey.currentContext!.findRenderObject() as RenderBox;
+    final pageSize = pdfPage.size;
+
+    // Ambil tinggi viewer dan tinggi halaman PDF
+    final renderSize = viewerBox.size;
+
+    final scaleX = pageSize.width / renderSize.width;
+    final scaleY = pageSize.height / renderSize.height;
+
+    // 💡 Koreksi posisi Y karena origin PDF di kiri bawah, bukan kiri atas
+    final correctedY = renderSize.height - offset.dy;
+
+    // Konversi koordinat layar ke koordinat PDF
+    final pdfX = offset.dx * scaleX;
+    final pdfY = correctedY * scaleY;
+
+    pdfPage.graphics.drawImage(pdfImage, Rect.fromLTWH(pdfX, pdfY, 100, 100));
 
     final outputPath = '${widget.filePath}_signed.pdf';
     final file = File(outputPath);
     await file.writeAsBytes(await document.save());
     document.dispose();
 
-    // Tampilkan PDF baru
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => PdfViewerPage(filePath: outputPath)),
