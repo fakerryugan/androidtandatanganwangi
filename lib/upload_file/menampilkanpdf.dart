@@ -1,11 +1,10 @@
-import 'dart:io';
-import 'package:android/system/posisiqr.dart';
 import 'package:android/system/uploadpdf.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart' as pdfx;
 import 'package:android/api/dokumen.dart';
 import 'package:android/api/token.dart';
 import 'package:android/upload_file/generateqr.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
@@ -24,7 +23,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   List<String> qrDataList = [];
   List<Offset> qrPositions = [];
   List<int> qrPages = [];
-  List<bool> isLockedList = [];
   List<double> qrSizes = [];
   int currentPage = 0;
 
@@ -73,41 +71,42 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                     final localPosition = renderBox.globalToLocal(
                       details.globalPosition,
                     );
+
                     final normalizedOffset = Offset(
                       localPosition.dx / constraints.maxWidth,
                       localPosition.dy / constraints.maxHeight,
                     );
+
                     setState(() {
                       qrPositions.add(normalizedOffset);
                       qrPages.add(currentPage - 1);
-                      isLockedList.add(true);
                       qrSizes.add(100);
                     });
                   }
                 },
                 child: pdfx.PdfViewPinch(controller: _pdfController),
               ),
+
+              // Menampilkan QR code statis sesuai halaman dan posisi
               for (int i = 0; i < qrPositions.length; i++)
                 if (qrPages[i] + 1 == currentPage)
                   Positioned(
                     left: qrPositions[i].dx * constraints.maxWidth,
                     top: qrPositions[i].dy * constraints.maxHeight,
-                    child: QrOverlay(
-                      data: qrDataList[i],
-                      locked: isLockedList[i],
-                      initialSize: qrSizes[i],
-                      onResize: (newSize) =>
-                          setState(() => qrSizes[i] = newSize),
-                      onLock: () => setState(() => isLockedList[i] = true),
-                      onDragEnd: (offset) {
-                        setState(() {
-                          qrPositions[i] = Offset(
-                            offset.dx / constraints.maxWidth,
-                            offset.dy / constraints.maxHeight,
-                          );
-                          qrPages[i] = currentPage - 1;
-                        });
-                      },
+                    child: SizedBox(
+                      width: qrSizes[i],
+                      height: qrSizes[i],
+                      child: Material(
+                        elevation: 4,
+                        color: Colors.white,
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: QrImageView(
+                            data: qrDataList[i],
+                            version: QrVersions.auto,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
             ],
