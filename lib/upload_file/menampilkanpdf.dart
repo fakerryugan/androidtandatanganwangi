@@ -61,14 +61,34 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           ),
           for (int i = 0; i < qrDataList.length; i++)
             Positioned(
-              left: qrPositions[i].dx,
-              top: qrPositions[i].dy,
+              left: qrPositions[i].dx * _pdfViewerController.zoomLevel,
+              top:
+                  (getPageOffset(i) -
+                  (qrPositions[i].dy * _pdfViewerController.zoomLevel)),
               child: Draggable(
                 feedback: qrWidget(qrDataList[i]),
                 childWhenDragging: const SizedBox(),
                 onDraggableCanceled: (_, offset) {
+                  // Konversi posisi layar ke posisi relatif halaman PDF
+                  RenderBox renderBox = context.findRenderObject() as RenderBox;
+                  Offset localOffset = renderBox.globalToLocal(offset);
+
+                  double zoom = _pdfViewerController.zoomLevel;
+                  double scrollY = _pdfViewerController.scrollOffset.dy;
+
+                  final pageHeightPdf = 842.0; // default A4 height
+                  final pageHeightScreen = pageHeightPdf * zoom;
+                  int pageIndex = (scrollY / pageHeightScreen).floor();
+
+                  double positionInPageY =
+                      (localOffset.dy + scrollY) -
+                      (pageHeightScreen * pageIndex);
+                  double convertedY = pageHeightPdf - (positionInPageY / zoom);
+                  double convertedX = localOffset.dx / zoom;
+
                   setState(() {
-                    qrPositions[i] = offset;
+                    qrPositions[i] = Offset(convertedX, convertedY);
+                    qrPages[i] = pageIndex;
                   });
                 },
                 child: qrWidget(qrDataList[i]),
@@ -162,6 +182,12 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     );
   }
 
+  double getPageOffset(int index) {
+    double zoom = _pdfViewerController.zoomLevel;
+    double pageHeight = 842 * zoom; // asumsi ukuran A4
+    return (qrPages[index]) * pageHeight;
+  }
+
   Widget qrWidget(String data) {
     return Container(
       width: 100,
@@ -212,14 +238,12 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     await file.writeAsBytes(await document.save());
     document.dispose();
 
-    // Kosongkan daftar QR sementara (opsional)
     setState(() {
       qrDataList.clear();
       qrPositions.clear();
       qrPages.clear();
     });
 
-    // Tampilkan file hasil penyisipan QR ke tampilan
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
