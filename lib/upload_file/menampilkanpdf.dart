@@ -12,7 +12,7 @@ class PdfViewerPage extends StatefulWidget {
   const PdfViewerPage({Key? key, required this.filePath}) : super(key: key);
 
   @override
-  _PdfViewerPageState createState() => _PdfViewerPageState();
+  State<PdfViewerPage> createState() => _PdfViewerPageState();
 }
 
 class _PdfViewerPageState extends State<PdfViewerPage> {
@@ -42,10 +42,8 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit', style: TextStyle(color: Colors.white)),
+        title: const Text('Edit PDF', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF172B4C),
-        automaticallyImplyLeading: false,
-        leading: const SizedBox(),
       ),
       body: Stack(
         children: [
@@ -67,12 +65,9 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                 feedback: qrWidget(qrDataList[i]),
                 childWhenDragging: const SizedBox(),
                 onDraggableCanceled: (_, offset) async {
-                  final converted = await convertToPdfCoordinates(
-                    offset,
-                    qrPages[i],
-                  );
+                  final newPos = await convertToPdfCoordinates(offset);
                   setState(() {
-                    qrPositions[i] = converted;
+                    qrPositions[i] = newPos;
                   });
                 },
                 child: qrWidget(qrDataList[i]),
@@ -85,12 +80,10 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         children: [
           if (qrDataList.isNotEmpty)
             FloatingActionButton.extended(
-              backgroundColor: Colors.green,
-              onPressed: () async {
-                await insertQrToPdf();
-              },
+              onPressed: insertQrToPdf,
               label: const Text('Simpan ke PDF'),
               icon: const Icon(Icons.save),
+              backgroundColor: Colors.green,
             ),
           const SizedBox(height: 10),
           FloatingActionButton.extended(
@@ -99,7 +92,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               final result = await showDialog<Map<String, dynamic>>(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text('Masukkan Data QR'),
+                  title: const Text('Data Tanda Tangan'),
                   content: Form(
                     key: _formKey,
                     child: Column(
@@ -116,7 +109,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                         TextFormField(
                           controller: tujuanController,
                           decoration: const InputDecoration(
-                            labelText: 'Alasan / Tujuan',
+                            labelText: 'Tujuan',
                           ),
                           validator: (value) =>
                               value!.isEmpty ? 'Wajib diisi' : null,
@@ -146,29 +139,26 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                 ),
               );
 
-              if (result != null && result['encrypted_link'] != null) {
+              if (result != null) {
                 setState(() {
                   qrDataList.add(result['encrypted_link']);
-                  qrPositions.add(
-                    const Offset(100, 100),
-                  ); // sementara, akan dikonversi saat drag
+                  qrPositions.add(const Offset(100, 100));
                   qrPages.add(result['selected_page']);
                 });
               }
             },
+            label: const Text(
+              '+ Tanda Tangan',
+              style: TextStyle(color: Colors.black),
+            ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: const BorderSide(color: Colors.black, width: 2),
-            ),
-            label: const Text(
-              '+ Tanda tangan',
-              style: TextStyle(color: Colors.black),
+              side: const BorderSide(color: Colors.black),
             ),
           ),
           const SizedBox(height: 70),
         ],
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -189,8 +179,8 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   }
 
   Future<void> insertQrToPdf() async {
-    final fileBytes = await File(widget.filePath).readAsBytes();
-    final document = PdfDocument(inputBytes: fileBytes);
+    final originalBytes = await File(widget.filePath).readAsBytes();
+    final document = PdfDocument(inputBytes: originalBytes);
 
     for (int i = 0; i < qrDataList.length; i++) {
       final qrImage = await QrPainter.withQr(
@@ -200,9 +190,9 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           version: QrVersions.auto,
           errorCorrectionLevel: QrErrorCorrectLevel.H,
         ).qrCode!,
-        gapless: true,
         color: const Color(0xFF000000),
         emptyColor: const Color(0xFFFFFFFF),
+        gapless: true,
       ).toImage(200);
 
       final byteData = await qrImage.toByteData(format: ui.ImageByteFormat.png);
@@ -210,43 +200,43 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final pdfImage = PdfBitmap(bytes);
 
       final pageIndex = qrPages[i];
-      final pdfOffset = qrPositions[i];
+      final page = document.pages[pageIndex];
 
-      document.pages[pageIndex].graphics.drawImage(
+      final Offset position = qrPositions[i];
+
+      // Tempel QR di koordinat PDF
+      page.graphics.drawImage(
         pdfImage,
-        Rect.fromLTWH(pdfOffset.dx, pdfOffset.dy, 100, 100),
+        Rect.fromLTWH(position.dx, position.dy, 100, 100),
       );
     }
 
-    final outputPath = '${widget.filePath}_signed.pdf';
-    final file = File(outputPath);
-    await file.writeAsBytes(await document.save());
+    final newPath = widget.filePath.replaceAll('.pdf', '_signed.pdf');
+    final outputFile = File(newPath);
+    await outputFile.writeAsBytes(await document.save());
     document.dispose();
 
-    // Ganti tampilan ke PDF baru
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (context) => PdfViewerPage(filePath: outputPath),
-      ),
+      MaterialPageRoute(builder: (_) => PdfViewerPage(filePath: newPath)),
     );
   }
 
-  Future<Offset> convertToPdfCoordinates(
-    Offset screenOffset,
-    int pageIndex,
-  ) async {
+  Future<Offset> convertToPdfCoordinates(Offset screenOffset) async {
     final renderBox = context.findRenderObject() as RenderBox;
     final localOffset = renderBox.globalToLocal(screenOffset);
 
     final zoom = _pdfViewerController.zoomLevel;
 
-    // Asumsikan ukuran halaman standar A4 595 x 842 points
+    // Asumsi ukuran standar A4
     const pageWidth = 595.0;
     const pageHeight = 842.0;
 
-    final pdfX = localOffset.dx / zoom;
-    final pdfY = localOffset.dy / zoom;
+    final relativeX = localOffset.dx / renderBox.size.width;
+    final relativeY = localOffset.dy / renderBox.size.height;
+
+    final pdfX = relativeX * pageWidth / zoom;
+    final pdfY = relativeY * pageHeight / zoom;
 
     return Offset(pdfX, pdfY);
   }
