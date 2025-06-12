@@ -41,6 +41,8 @@ dependencies:
   qr_flutter: ^4.1.0 
   syncfusion_flutter_pdf: 27.2.5 
   image: ^4.2.0 
+  pdfx: ^2.4.0
+  
 
 
 dev_dependencies:
