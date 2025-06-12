@@ -201,25 +201,32 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     final pageIndex = page - 1;
     final pdfPage = document.pages[pageIndex];
 
-    // ✅ Hitung rasio skala tampilan viewer ke page PDF
-    final viewerBox =
-        _pdfViewerKey.currentContext!.findRenderObject() as RenderBox;
+    // Ambil ukuran halaman PDF
     final pageSize = pdfPage.size;
 
-    // Ambil tinggi viewer dan tinggi halaman PDF
+    // Ambil ukuran viewer
+    final viewerBox =
+        _pdfViewerKey.currentContext!.findRenderObject() as RenderBox;
     final renderSize = viewerBox.size;
 
-    final scaleX = pageSize.width / renderSize.width;
-    final scaleY = pageSize.height / renderSize.height;
+    // Ambil faktor zoom dan scroll offset dari controller
+    final zoom = pdfViewerController.zoomLevel;
+    final scrollOffset = pdfViewerController.scrollOffset;
 
-    // 💡 Koreksi posisi Y karena origin PDF di kiri bawah, bukan kiri atas
-    final correctedY = renderSize.height - offset.dy;
+    // Hitung posisi relatif terhadap halaman
+    final double dx =
+        (offset.dx) * (pageSize.width / (renderSize.width * zoom));
+    final double dy =
+        (offset.dy + scrollOffset.dy - kToolbarHeight) *
+        (pageSize.height / (renderSize.height * zoom));
 
-    // Konversi koordinat layar ke koordinat PDF
-    final pdfX = offset.dx * scaleX;
-    final pdfY = correctedY * scaleY;
+    // Koreksi koordinat Y untuk PDF (origin kiri bawah)
+    final correctedY = pageSize.height - dy;
 
-    pdfPage.graphics.drawImage(pdfImage, Rect.fromLTWH(pdfX, pdfY, 100, 100));
+    pdfPage.graphics.drawImage(
+      pdfImage,
+      Rect.fromLTWH(dx, correctedY, 100, 100),
+    );
 
     final outputPath = '${widget.filePath}_signed.pdf';
     final file = File(outputPath);
