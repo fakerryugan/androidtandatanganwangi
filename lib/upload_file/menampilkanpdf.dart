@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'package:android/upload_file/generateqr.dart';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
@@ -17,11 +16,12 @@ class PdfViewerPage extends StatefulWidget {
 }
 
 class _PdfViewerPageState extends State<PdfViewerPage> {
+  final PdfViewerController _pdfViewerController = PdfViewerController();
+  final GlobalKey<SfPdfViewerState> _pdfViewerKey = GlobalKey();
+
   final TextEditingController nipController = TextEditingController();
   final TextEditingController tujuanController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-
-  final PdfViewerController _pdfViewerController = PdfViewerController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   List<String> qrDataList = [];
   List<Offset> qrPositions = [];
@@ -44,14 +44,14 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       appBar: AppBar(
         title: const Text('Edit', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF172B4C),
-        centerTitle: true,
         automaticallyImplyLeading: false,
-        leading: Container(),
+        leading: const SizedBox(),
       ),
       body: Stack(
         children: [
           SfPdfViewer.file(
             file,
+            key: _pdfViewerKey,
             controller: _pdfViewerController,
             onDocumentLoaded: (details) {
               setState(() {
@@ -61,73 +61,23 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           ),
           for (int i = 0; i < qrDataList.length; i++)
             Positioned(
-              left: qrPositions[i].dx * _pdfViewerController.zoomLevel,
-              top:
-                  (getPageOffset(i) -
-                  (qrPositions[i].dy * _pdfViewerController.zoomLevel)),
+              left: qrPositions[i].dx,
+              top: qrPositions[i].dy,
               child: Draggable(
                 feedback: qrWidget(qrDataList[i]),
                 childWhenDragging: const SizedBox(),
-                onDraggableCanceled: (_, offset) {
-                  // Konversi posisi layar ke posisi relatif halaman PDF
-                  RenderBox renderBox = context.findRenderObject() as RenderBox;
-                  Offset localOffset = renderBox.globalToLocal(offset);
-
-                  double zoom = _pdfViewerController.zoomLevel;
-                  double scrollY = _pdfViewerController.scrollOffset.dy;
-
-                  final pageHeightPdf = 842.0; // default A4 height
-                  final pageHeightScreen = pageHeightPdf * zoom;
-                  int pageIndex = (scrollY / pageHeightScreen).floor();
-
-                  double positionInPageY =
-                      (localOffset.dy + scrollY) -
-                      (pageHeightScreen * pageIndex);
-                  double convertedY = pageHeightPdf - (positionInPageY / zoom);
-                  double convertedX = localOffset.dx / zoom;
-
+                onDraggableCanceled: (_, offset) async {
+                  final converted = await convertToPdfCoordinates(
+                    offset,
+                    qrPages[i],
+                  );
                   setState(() {
-                    qrPositions[i] = Offset(convertedX, convertedY);
-                    qrPages[i] = pageIndex;
+                    qrPositions[i] = converted;
                   });
                 },
                 child: qrWidget(qrDataList[i]),
               ),
             ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(30),
-                topRight: Radius.circular(30),
-              ),
-              child: Container(
-                height: 60,
-                color: const Color(0xFF172B4C),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Center(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.arrow_back_outlined,
-                            color: Color(0xFF172B4C),
-                          ),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
       ),
       floatingActionButton: Column(
@@ -138,9 +88,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               backgroundColor: Colors.green,
               onPressed: () async {
                 await insertQrToPdf();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('QR berhasil disimpan ke PDF')),
-                );
               },
               label: const Text('Simpan ke PDF'),
               icon: const Icon(Icons.save),
@@ -149,20 +96,63 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           FloatingActionButton.extended(
             backgroundColor: Colors.white,
             onPressed: () async {
-              final result = await showInputDialog(
+              final result = await showDialog<Map<String, dynamic>>(
                 context: context,
-                formKey: _formKey,
-                nipController: nipController,
-                tujuanController: tujuanController,
-                showTujuan: true,
-                totalPages: totalPages,
+                builder: (context) => AlertDialog(
+                  title: const Text('Masukkan Data QR'),
+                  content: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: nipController,
+                          decoration: const InputDecoration(
+                            labelText: 'NIP/NIM',
+                          ),
+                          validator: (value) =>
+                              value!.isEmpty ? 'Wajib diisi' : null,
+                        ),
+                        TextFormField(
+                          controller: tujuanController,
+                          decoration: const InputDecoration(
+                            labelText: 'Alasan / Tujuan',
+                          ),
+                          validator: (value) =>
+                              value!.isEmpty ? 'Wajib diisi' : null,
+                        ),
+                        DropdownButtonFormField<int>(
+                          decoration: const InputDecoration(
+                            labelText: 'Halaman',
+                          ),
+                          items: List.generate(totalPages, (index) {
+                            return DropdownMenuItem(
+                              value: index,
+                              child: Text('Halaman ${index + 1}'),
+                            );
+                          }),
+                          onChanged: (value) {
+                            Navigator.pop(context, {
+                              'encrypted_link': Uri.encodeComponent(
+                                '${nipController.text}_${tujuanController.text}_${DateTime.now().millisecondsSinceEpoch}',
+                              ),
+                              'selected_page': value,
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               );
 
               if (result != null && result['encrypted_link'] != null) {
                 setState(() {
                   qrDataList.add(result['encrypted_link']);
-                  qrPositions.add(const Offset(100, 100));
-                  qrPages.add(result['selected_page'] ?? 0);
+                  qrPositions.add(
+                    const Offset(100, 100),
+                  ); // sementara, akan dikonversi saat drag
+                  qrPages.add(result['selected_page']);
                 });
               }
             },
@@ -180,12 +170,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
-  }
-
-  double getPageOffset(int index) {
-    double zoom = _pdfViewerController.zoomLevel;
-    double pageHeight = 842 * zoom; // asumsi ukuran A4
-    return (qrPages[index]) * pageHeight;
   }
 
   Widget qrWidget(String data) {
@@ -225,11 +209,12 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final bytes = byteData!.buffer.asUint8List();
       final pdfImage = PdfBitmap(bytes);
 
-      final offset = qrPositions[i];
       final pageIndex = qrPages[i];
+      final pdfOffset = qrPositions[i];
+
       document.pages[pageIndex].graphics.drawImage(
         pdfImage,
-        Rect.fromLTWH(offset.dx, offset.dy, 100, 100),
+        Rect.fromLTWH(pdfOffset.dx, pdfOffset.dy, 100, 100),
       );
     }
 
@@ -238,17 +223,31 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     await file.writeAsBytes(await document.save());
     document.dispose();
 
-    setState(() {
-      qrDataList.clear();
-      qrPositions.clear();
-      qrPages.clear();
-    });
-
+    // Ganti tampilan ke PDF baru
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => PdfViewerPage(filePath: outputPath),
       ),
     );
+  }
+
+  Future<Offset> convertToPdfCoordinates(
+    Offset screenOffset,
+    int pageIndex,
+  ) async {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final localOffset = renderBox.globalToLocal(screenOffset);
+
+    final zoom = _pdfViewerController.zoomLevel;
+
+    // Asumsikan ukuran halaman standar A4 595 x 842 points
+    const pageWidth = 595.0;
+    const pageHeight = 842.0;
+
+    final pdfX = localOffset.dx / zoom;
+    final pdfY = localOffset.dy / zoom;
+
+    return Offset(pdfX, pdfY);
   }
 }
