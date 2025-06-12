@@ -211,5 +211,20 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     final file = File(outputPath);
     await file.writeAsBytes(await document.save());
     document.dispose();
+
+    // Kosongkan daftar QR sementara (opsional)
+    setState(() {
+      qrDataList.clear();
+      qrPositions.clear();
+      qrPages.clear();
+    });
+
+    // Tampilkan file hasil penyisipan QR ke tampilan
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PdfViewerPage(filePath: outputPath),
+      ),
+    );
   }
 }
