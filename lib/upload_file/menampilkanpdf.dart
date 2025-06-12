@@ -19,7 +19,6 @@ class PdfViewerPage extends StatefulWidget {
 
 class _PdfViewerPageState extends State<PdfViewerPage> {
   late pdfx.PdfControllerPinch _pdfController;
-
   final TextEditingController nipController = TextEditingController();
   final TextEditingController tujuanController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -27,6 +26,8 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   List<String> qrDataList = [];
   List<Offset> qrPositions = [];
   List<int> qrPages = [];
+  List<bool> isLockedList = [];
+  int currentPage = 0;
 
   @override
   void initState() {
@@ -34,6 +35,12 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     _pdfController = pdfx.PdfControllerPinch(
       document: pdfx.PdfDocument.openFile(widget.filePath),
     );
+
+    _pdfController.pageListenable.addListener(() {
+      setState(() {
+        currentPage = _pdfController.pageListenable.value;
+      });
+    });
   }
 
   @override
@@ -59,6 +66,29 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     );
   }
 
+  Widget qrDraggable(int index) {
+    return isLockedList[index]
+        ? qrWidget(qrDataList[index])
+        : Stack(
+            alignment: Alignment.topRight,
+            children: [
+              qrWidget(qrDataList[index]),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    isLockedList[index] = true;
+                  });
+                },
+                child: const CircleAvatar(
+                  radius: 12,
+                  backgroundColor: Colors.red,
+                  child: Icon(Icons.check, size: 16, color: Colors.white),
+                ),
+              ),
+            ],
+          );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -69,47 +99,33 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         automaticallyImplyLeading: false,
         leading: Container(),
       ),
-      body: Stack(
-        children: [
-          pdfx.PdfViewPinch(
-            controller: _pdfController,
-            builders: pdfx.PdfViewPinchBuilders<pdfx.DefaultBuilderOptions>(
-              options: const pdfx.DefaultBuilderOptions(),
-              documentLoaderBuilder: (_) =>
-                  const Center(child: CircularProgressIndicator()),
-              pageLoaderBuilder: (_) =>
-                  const Center(child: CircularProgressIndicator()),
-            ),
-          ),
-          // Overlay QR code sesuai halaman aktif
-          Positioned.fill(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final currentPage = _pdfController.page;
-                return Stack(
-                  children: [
-                    for (int i = 0; i < qrPages.length; i++)
-                      if (qrPages[i] == currentPage - 1)
-                        Positioned(
-                          left: qrPositions[i].dx,
-                          top: qrPositions[i].dy,
-                          child: Draggable(
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              pdfx.PdfViewPinch(controller: _pdfController),
+              for (int i = 0; i < qrDataList.length; i++)
+                if (qrPages[i] + 1 == currentPage)
+                  Positioned(
+                    left: qrPositions[i].dx,
+                    top: qrPositions[i].dy,
+                    child: isLockedList[i]
+                        ? qrWidget(qrDataList[i])
+                        : Draggable(
                             feedback: qrWidget(qrDataList[i]),
                             childWhenDragging: const SizedBox(),
                             onDraggableCanceled: (_, offset) {
                               setState(() {
                                 qrPositions[i] = offset;
+                                qrPages[i] = currentPage - 1;
                               });
                             },
-                            child: qrWidget(qrDataList[i]),
+                            child: qrDraggable(i),
                           ),
-                        ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
+                  ),
+            ],
+          );
+        },
       ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
@@ -127,11 +143,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               );
 
               if (result != null && result['encrypted_link'] != null) {
-                final currentPage = _pdfController.page;
                 setState(() {
                   qrDataList.add(result['encrypted_link']);
                   qrPositions.add(const Offset(100, 100));
                   qrPages.add(currentPage - 1);
+                  isLockedList.add(false);
                 });
               }
             },
@@ -185,6 +201,9 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     final fileBytes = await File(widget.filePath).readAsBytes();
     final document = syncfusion.PdfDocument(inputBytes: fileBytes);
 
+    final renderBox = context.findRenderObject() as RenderBox?;
+    final screenSize = renderBox?.size ?? Size.zero;
+
     for (int i = 0; i < qrDataList.length; i++) {
       final qrImage = await QrPainter.withQr(
         qr: QrValidator.validate(
@@ -201,12 +220,14 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final bytes = byteData!.buffer.asUint8List();
       final pdfImage = syncfusion.PdfBitmap(bytes);
 
-      final offset = qrPositions[i];
       final page = document.pages[qrPages[i]];
       final pageSize = page.getClientSize();
 
-      final pdfX = offset.dx;
-      final pdfY = pageSize.height - offset.dy - 100;
+      final ratioX = pageSize.width / screenSize.width;
+      final ratioY = pageSize.height / screenSize.height;
+
+      final pdfX = qrPositions[i].dx * ratioX;
+      final pdfY = pageSize.height - (qrPositions[i].dy * ratioY) - 100;
 
       page.graphics.drawImage(pdfImage, Rect.fromLTWH(pdfX, pdfY, 100, 100));
     }
