@@ -33,13 +33,13 @@ dependencies:
   http: ^1.2.0
   device_info_plus: ^9.0.0
   cupertino_icons: ^1.0.8
-  syncfusion_flutter_pdfviewer: ^25.2.3
-  syncfusion_pdfviewer_platform_interface: ^25.2.3
+  syncfusion_flutter_pdfviewer: ^24.2.9 # Pastikan ini
+  syncfusion_flutter_pdf: ^24.2.9
+  syncfusion_pdfviewer_platform_interface: ^24.2.9
   file_picker: ^10.1.9
   path_provider: ^2.1.5
   shared_preferences: ^2.5.3
   qr_flutter: ^4.1.0 
-  syncfusion_flutter_pdf: ^25.2.3 
   image: ^4.2.0 
   pdfx: ^2.4.0
   open_filex: ^4.7.0

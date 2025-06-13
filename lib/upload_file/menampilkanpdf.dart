@@ -5,6 +5,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart'
+    show PdfPageInfo; // <--- TAMBAHKAN ATAU PASTIKAN INI ADA
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:qr/qr.dart';
 
@@ -133,10 +135,48 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                           ),
                         );
 
+                        // Ambil posisi yang dikonversi dari layar ke koordinat PDF
+                        final SfPdfViewerState? viewerState =
+                            _pdfViewerKey.currentState;
+                        if (viewerState == null ||
+                            qrPosition == null ||
+                            qrPageNumber == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Error: Posisi QR tidak valid.'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                          return;
+                        }
+
+                        // Mendapatkan posisi PDF yang sudah dikonversi
+                        final PdfPageInfo
+                        pageInfo = viewerState.convertPointToPageInfo(
+                          Offset(
+                            qrPosition!.dx +
+                                (qrDisplaySize / 2), // Titik tengah QR di layar
+                            qrPosition!.dy +
+                                (qrDisplaySize / 2), // Titik tengah QR di layar
+                          ),
+                          qrPageNumber!,
+                        );
+
+                        // pageInfo.pageIndex sudah 0-indexed
+                        // pageInfo.bounds memberikan Rect di dalam halaman PDF (dalam points)
+                        // Kita hanya butuh origin (top-left) dari bounds.
+                        final Offset pdfPointOffset = Offset(
+                          pageInfo.bounds.left,
+                          pageInfo.bounds.top,
+                        );
+
                         await insertQrToPdfDirectly(
                           data: currentQrData!,
-                          page: qrPageNumber!,
-                          offset: qrPosition!,
+                          page:
+                              pageInfo.pageIndex +
+                              1, // Konversi kembali ke 1-indexed untuk fungsi
+                          offset:
+                              pdfPointOffset, // Gunakan offset yang sudah dikonversi
                         );
 
                         setState(() {
@@ -184,7 +224,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               nipController: nipController,
               tujuanController: tujuanController,
               showTujuan: true,
-              totalPages: pdfViewerController.pageCount, // Add this line
+              totalPages: pdfViewerController.pageCount,
             );
 
             if (result != null && result['encrypted_link'] != null) {
@@ -221,13 +261,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
   Future<void> insertQrToPdfDirectly({
     required String data,
-    required int page,
-    required Offset offset,
+    required int page, // Ini adalah 1-indexed
+    required Offset offset, // Ini sudah dalam koordinat PDF (points)
   }) async {
     // Membaca file PDF yang ada
     final fileBytes = await File(widget.filePath).readAsBytes();
-    // Objek PdfDocument dibuat di sini, lokal untuk fungsi ini.
-    // Ini adalah langkah kunci untuk mengatasi error "undefined_getter"
     final PdfDocument document = PdfDocument(inputBytes: fileBytes);
 
     final QrPainter qrPainter = QrPainter.withQr(
@@ -253,36 +291,34 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     final Uint8List bytes = byteData.buffer.asUint8List();
     final PdfBitmap pdfImage = PdfBitmap(bytes);
 
+    // Page index untuk Syncfusion adalah 0-indexed
     final int pageIndex = page - 1;
     if (pageIndex < 0 || pageIndex >= document.pages.count) {
       throw Exception('Invalid page number: $page');
     }
     final PdfPage pdfPage = document.pages[pageIndex];
 
-    final RenderBox pdfViewerRenderBox =
-        _pdfViewerKey.currentContext!.findRenderObject() as RenderBox;
-    final Size pdfViewerScreenSize = pdfViewerRenderBox.size;
-
+    // pdfPageActualSize adalah ukuran halaman PDF dalam points (standar 72 DPI)
     final Size pdfPageActualSize = pdfPage.size;
 
-    final double zoomLevel = pdfViewerController.zoomLevel;
-    final Offset scrollOffset = pdfViewerController.scrollOffset;
+    // offset.dx dan offset.dy sekarang sudah dalam koordinat PDF (points)
+    // dan relatif terhadap pojok kiri atas halaman PDF.
+    // Namun, Syncfusion PDF memiliki koordinat Y yang dimulai dari bawah.
+    // Jadi, kita perlu mengonversi Y dari top-origin ke bottom-origin.
 
-    final double scaleX =
-        pdfPageActualSize.width / (pdfViewerScreenSize.width * zoomLevel);
-    final double scaleY =
-        pdfPageActualSize.height / (pdfViewerScreenSize.height * zoomLevel);
-
-    final double pdfX = (offset.dx + scrollOffset.dx) * scaleX;
-    final double pdfYFromTop = (offset.dy + scrollOffset.dy) * scaleY;
-
-    // Completed the line that was cut off previously
-    final double finalPdfY = pdfPageActualSize.height - pdfYFromTop - qrPdfSize;
+    final double finalPdfX = offset.dx; // X sudah benar
+    // Koordinat Y di PDF dimulai dari bawah.
+    // offset.dy adalah jarak dari atas.
+    // pdfPageActualSize.height adalah tinggi halaman PDF.
+    // qrPdfSize adalah tinggi QR dalam points.
+    // Jadi, (pdfPageActualSize.height - offset.dy) adalah Y dari bawah
+    // dikurangi tinggi QR agar posisi QR pas di atas offset.dy.
+    final double finalPdfY = pdfPageActualSize.height - offset.dy - qrPdfSize;
 
     // Gambar QR code ke halaman PDF
     pdfPage.graphics.drawImage(
       pdfImage,
-      Rect.fromLTWH(pdfX, finalPdfY, qrPdfSize, qrPdfSize),
+      Rect.fromLTWH(finalPdfX, finalPdfY, qrPdfSize, qrPdfSize),
     );
 
     // Simpan PDF yang sudah dimodifikasi
