@@ -13,61 +13,48 @@ Future<Map<String, dynamic>?> showInputDialog({
   return showDialog<Map<String, dynamic>>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Ditujukan Untuk'),
-      content: IntrinsicWidth(
-        child: Form(
-          key: formKey,
+      title: const Text('Input Tanda Tangan'),
+      content: Form(
+        key: formKey,
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'NIP/NIM',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 6),
               TextFormField(
                 controller: nipController,
                 decoration: const InputDecoration(
-                  hintText: 'Masukkan NIP/NIM',
+                  labelText: 'NIP/NIM',
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Masukkan NIP/NIM' : null,
+                validator: (val) =>
+                    val == null || val.isEmpty ? 'Wajib diisi' : null,
               ),
-              const SizedBox(height: 12),
-              if (showTujuan) ...[
-                const Text(
-                  'Tujuan Surat',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
+              const SizedBox(height: 10),
+              if (showTujuan)
                 TextFormField(
                   controller: tujuanController,
                   decoration: const InputDecoration(
-                    hintText: 'Masukkan tujuan surat',
+                    labelText: 'Alasan / Tujuan',
                     border: OutlineInputBorder(),
                   ),
-                  validator: (value) =>
-                      value == null || value.isEmpty ? 'Masukkan tujuan' : null,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? 'Wajib diisi' : null,
                 ),
-                const SizedBox(height: 12),
-              ],
-              const Text('Pilih halaman tempat QR akan ditempatkan'),
-              const SizedBox(height: 6),
+              const SizedBox(height: 10),
               DropdownButtonFormField<int>(
                 value: selectedPage,
-                decoration: const InputDecoration(border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: 'Halaman',
+                  border: OutlineInputBorder(),
+                ),
                 items: List.generate(
                   totalPages,
-                  (index) => DropdownMenuItem(
-                    value: index + 1,
-                    child: Text('Halaman ${index + 1}'),
+                  (i) => DropdownMenuItem(
+                    value: i + 1,
+                    child: Text('Halaman ${i + 1}'),
                   ),
                 ),
-                onChanged: (value) {
-                  if (value != null) selectedPage = value;
-                },
+                onChanged: (val) => selectedPage = val ?? 1,
               ),
             ],
           ),
@@ -81,16 +68,14 @@ Future<Map<String, dynamic>?> showInputDialog({
         ElevatedButton(
           onPressed: () {
             if (formKey.currentState!.validate()) {
-              final nip = nipController.text;
-              final tujuan = tujuanController.text;
-
-              // TODO: Ganti generate link QR di sini
-              final encryptedLink =
+              final nip = nipController.text.trim();
+              final tujuan = tujuanController.text.trim();
+              final payload =
                   '$nip-$tujuan-${DateTime.now().millisecondsSinceEpoch}';
 
               Navigator.pop(context, {
-                'encrypted_link': encryptedLink,
-                'selected_page': selectedPage - 1, // zero-based index
+                'encrypted_link': payload,
+                'selected_page': selectedPage - 1,
               });
 
               nipController.clear();
