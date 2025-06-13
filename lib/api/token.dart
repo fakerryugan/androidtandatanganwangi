@@ -42,3 +42,33 @@ Future<List<Map<String, dynamic>>> fetchUserDocuments() async {
     return [];
   }
 }
+
+Future<Map<String, dynamic>?> uploadSigner({
+  required int documentId,
+  required String nip,
+  String? alasan,
+  required String token,
+}) async {
+  final uri = Uri.parse(
+    'http://fakerryugan.my.id/api/documents/$documentId/add-signer',
+  );
+
+  final response = await http.post(
+    uri,
+    headers: {
+      'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode({
+      'nip': nip,
+      if (alasan != null && alasan.isNotEmpty) 'alasan': alasan,
+    }),
+  );
+
+  if (response.statusCode == 200) {
+    return jsonDecode(response.body);
+  } else {
+    final message = jsonDecode(response.body)['message'];
+    throw Exception(message);
+  }
+}
