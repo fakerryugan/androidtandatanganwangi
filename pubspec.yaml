@@ -31,15 +31,15 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0
-  device_info_plus: ^9.0.0
+  device_info_plus: ^11.4.0
   cupertino_icons: ^1.0.8
-  syncfusion_flutter_pdfviewer: ^25.2.3
-  syncfusion_pdfviewer_platform_interface: ^25.2.3
+  syncfusion_flutter_pdfviewer: ^29.2.10
+  syncfusion_pdfviewer_platform_interface: ^29.2.10
   file_picker: ^10.1.9
   path_provider: ^2.1.5
   shared_preferences: ^2.5.3
   qr_flutter: ^4.1.0
-  syncfusion_flutter_pdf: ^25.2.3
+  syncfusion_flutter_pdf: ^29.2.10
   image: ^4.2.0
   pdfx: ^2.4.0
   open_filex: ^4.7.0
