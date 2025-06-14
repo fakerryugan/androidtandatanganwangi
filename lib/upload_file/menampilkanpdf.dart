@@ -5,8 +5,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart'
-    show PdfPageInfo; // <--- TAMBAHKAN ATAU PASTIKAN INI ADA
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:qr/qr.dart';
 
@@ -30,14 +28,16 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   final _formKey = GlobalKey<FormState>();
 
   String? currentQrData;
-  Offset? qrPosition;
-  int? qrPageNumber;
-  bool waitingForTap = false;
+  Offset? qrPosition; // Posisi QR di layar (widget)
+  int? qrPageNumber; // Halaman PDF tempat QR akan disisipkan (1-indexed)
+  bool waitingForTap = false; // Menunggu pengguna tap untuk menempatkan QR
   bool qrLocked =
-      false;
+  false; // Menandakan QR sudah ditempatkan dan siap disimpan permanen
+
+  // Ukuran QR code di layar dan di PDF
   static const double qrDisplaySize = 100.0; // Ukuran QR di UI (untuk drag)
   static const double qrPdfSize =
-      100.0;
+  100.0; // Ukuran QR saat disisipkan ke PDF (dalam points)
 
   @override
   void dispose() {
@@ -61,21 +61,21 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           GestureDetector(
             onTapDown: waitingForTap && !qrLocked
                 ? (details) {
-                    setState(() {
-                      qrPosition = details.localPosition;
-                      qrPageNumber = pdfViewerController.pageNumber;
-                      waitingForTap = false;
-                    });
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'QR Code ditempatkan. Anda bisa menggesernya atau tekan kunci.',
-                        ),
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  }
+              setState(() {
+                qrPosition = details.localPosition;
+                qrPageNumber = pdfViewerController.pageNumber;
+                waitingForTap = false;
+              });
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'QR Code ditempatkan. Anda bisa menggesernya atau tekan kunci.',
+                  ),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
                 : null,
             child: SfPdfViewer.file(
               file,
@@ -113,7 +113,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                       color: Colors.white,
                       child: QrImageView(
                         data:
-                            "http://fakerryugan.my.id/api/signature/view-from-payload?payload=$currentQrData",
+                        "http://fakerryugan.my.id/api/signature/view-from-payload?payload=$currentQrData",
                         version: QrVersions.auto,
                         size: qrDisplaySize,
                         padding: const EdgeInsets.all(5.0),
@@ -133,41 +133,10 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                           ),
                         );
 
-                        final SfPdfViewerState? viewerState =
-                            _pdfViewerKey.currentState;
-                        if (viewerState == null ||
-                            qrPosition == null ||
-                            qrPageNumber == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Error: Posisi QR tidak valid.'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                          return;
-                        }
-                        final PdfPageInfo
-                        pageInfo = viewerState.convertPointToPageInfo(
-                          Offset(
-                            qrPosition!.dx +
-                                (qrDisplaySize / 2), // Titik tengah QR di layar
-                            qrPosition!.dy +
-                                (qrDisplaySize / 2), // Titik tengah QR di layar
-                          ),
-                          qrPageNumber!,
-                        );
-                        final Offset pdfPointOffset = Offset(
-                          pageInfo.bounds.left,
-                          pageInfo.bounds.top,
-                        );
-
                         await insertQrToPdfDirectly(
                           data: currentQrData!,
-                          page:
-                              pageInfo.pageIndex +
-                              1,
-                          offset:
-                              pdfPointOffset, // Gunakan offset yang sudah dikonversi
+                          page: qrPageNumber!,
+                          offset: qrPosition!,
                         );
 
                         setState(() {
@@ -215,7 +184,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               nipController: nipController,
               tujuanController: tujuanController,
               showTujuan: true,
-              totalPages: pdfViewerController.pageCount,
+              totalPages: pdfViewerController.pageCount, // Add this line
             );
 
             if (result != null && result['encrypted_link'] != null) {
@@ -252,17 +221,19 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
   Future<void> insertQrToPdfDirectly({
     required String data,
-    required int page, // Ini adalah 1-indexed
-    required Offset offset, // Ini sudah dalam koordinat PDF (points)
+    required int page,
+    required Offset offset,
   }) async {
     // Membaca file PDF yang ada
     final fileBytes = await File(widget.filePath).readAsBytes();
+    // Objek PdfDocument dibuat di sini, lokal untuk fungsi ini.
+    // Ini adalah langkah kunci untuk mengatasi error "undefined_getter"
     final PdfDocument document = PdfDocument(inputBytes: fileBytes);
 
     final QrPainter qrPainter = QrPainter.withQr(
       qr: QrValidator.validate(
         data:
-            'http://fakerryugan.my.id/api/signature/view-from-payload?payload=$data',
+        'http://fakerryugan.my.id/api/signature/view-from-payload?payload=$data',
         version: QrVersions.auto,
         errorCorrectionLevel: QrErrorCorrectLevel.H,
       ).qrCode!,
@@ -282,34 +253,36 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     final Uint8List bytes = byteData.buffer.asUint8List();
     final PdfBitmap pdfImage = PdfBitmap(bytes);
 
-    // Page index untuk Syncfusion adalah 0-indexed
     final int pageIndex = page - 1;
     if (pageIndex < 0 || pageIndex >= document.pages.count) {
       throw Exception('Invalid page number: $page');
     }
     final PdfPage pdfPage = document.pages[pageIndex];
 
-    // pdfPageActualSize adalah ukuran halaman PDF dalam points (standar 72 DPI)
+    final RenderBox pdfViewerRenderBox =
+    _pdfViewerKey.currentContext!.findRenderObject() as RenderBox;
+    final Size pdfViewerScreenSize = pdfViewerRenderBox.size;
+
     final Size pdfPageActualSize = pdfPage.size;
 
-    // offset.dx dan offset.dy sekarang sudah dalam koordinat PDF (points)
-    // dan relatif terhadap pojok kiri atas halaman PDF.
-    // Namun, Syncfusion PDF memiliki koordinat Y yang dimulai dari bawah.
-    // Jadi, kita perlu mengonversi Y dari top-origin ke bottom-origin.
+    final double zoomLevel = pdfViewerController.zoomLevel;
+    final Offset scrollOffset = pdfViewerController.scrollOffset;
 
-    final double finalPdfX = offset.dx; // X sudah benar
-    // Koordinat Y di PDF dimulai dari bawah.
-    // offset.dy adalah jarak dari atas.
-    // pdfPageActualSize.height adalah tinggi halaman PDF.
-    // qrPdfSize adalah tinggi QR dalam points.
-    // Jadi, (pdfPageActualSize.height - offset.dy) adalah Y dari bawah
-    // dikurangi tinggi QR agar posisi QR pas di atas offset.dy.
-    final double finalPdfY = pdfPageActualSize.height - offset.dy - qrPdfSize;
+    final double scaleX =
+        pdfPageActualSize.width / (pdfViewerScreenSize.width * zoomLevel);
+    final double scaleY =
+        pdfPageActualSize.height / (pdfViewerScreenSize.height * zoomLevel);
+
+    final double pdfX = (offset.dx + scrollOffset.dx) * scaleX;
+    final double pdfYFromTop = (offset.dy + scrollOffset.dy) * scaleY;
+
+    // Completed the line that was cut off previously
+    final double finalPdfY = pdfPageActualSize.height - pdfYFromTop - qrPdfSize;
 
     // Gambar QR code ke halaman PDF
     pdfPage.graphics.drawImage(
       pdfImage,
-      Rect.fromLTWH(finalPdfX, finalPdfY, qrPdfSize, qrPdfSize),
+      Rect.fromLTWH(pdfX, finalPdfY, qrPdfSize, qrPdfSize),
     );
 
     // Simpan PDF yang sudah dimodifikasi
