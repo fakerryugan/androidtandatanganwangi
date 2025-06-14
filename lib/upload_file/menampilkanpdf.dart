@@ -2,19 +2,23 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:android/api/token.dart';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:qr/qr.dart';
 
-// Sesuaikan path ini jika letak file Anda berbeda
 import 'package:android/upload_file/generateqr.dart';
 
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
+  final int documentId;
 
-  const PdfViewerPage({Key? key, required this.filePath}) : super(key: key);
+  const PdfViewerPage({
+    Key? key,
+    required this.filePath,
+    required this.documentId,
+  }) : super(key: key);
 
   @override
   _PdfViewerPageState createState() => _PdfViewerPageState();
@@ -28,16 +32,12 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   final _formKey = GlobalKey<FormState>();
 
   String? currentQrData;
-  Offset? qrPosition; // Posisi QR di layar (widget)
-  int? qrPageNumber; // Halaman PDF tempat QR akan disisipkan (1-indexed)
-  bool waitingForTap = false; // Menunggu pengguna tap untuk menempatkan QR
-  bool qrLocked =
-  false; // Menandakan QR sudah ditempatkan dan siap disimpan permanen
-
-  // Ukuran QR code di layar dan di PDF
-  static const double qrDisplaySize = 100.0; // Ukuran QR di UI (untuk drag)
-  static const double qrPdfSize =
-  100.0; // Ukuran QR saat disisipkan ke PDF (dalam points)
+  Offset? qrPosition;
+  int? qrPageNumber;
+  bool waitingForTap = false;
+  bool qrLocked = false;
+  static const double qrDisplaySize = 100.0;
+  static const double qrPdfSize = 100.0;
 
   @override
   void dispose() {
@@ -61,21 +61,21 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           GestureDetector(
             onTapDown: waitingForTap && !qrLocked
                 ? (details) {
-              setState(() {
-                qrPosition = details.localPosition;
-                qrPageNumber = pdfViewerController.pageNumber;
-                waitingForTap = false;
-              });
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'QR Code ditempatkan. Anda bisa menggesernya atau tekan kunci.',
-                  ),
-                  duration: Duration(seconds: 3),
-                ),
-              );
-            }
+                    setState(() {
+                      qrPosition = details.localPosition;
+                      qrPageNumber = pdfViewerController.pageNumber;
+                      waitingForTap = false;
+                    });
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'QR Code ditempatkan. Anda bisa menggesernya atau tekan kunci.',
+                        ),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
                 : null,
             child: SfPdfViewer.file(
               file,
@@ -112,8 +112,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                       height: qrDisplaySize,
                       color: Colors.white,
                       child: QrImageView(
-                        data:
-                        "http://fakerryugan.my.id/api/signature/view-from-payload?payload=$currentQrData",
+                        data: "$baseUrl/$currentQrData",
                         version: QrVersions.auto,
                         size: qrDisplaySize,
                         padding: const EdgeInsets.all(5.0),
@@ -184,18 +183,18 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               nipController: nipController,
               tujuanController: tujuanController,
               showTujuan: true,
-              totalPages: pdfViewerController.pageCount, // Add this line
+              totalPages: pdfViewerController.pageCount,
+              documentId: widget.documentId,
             );
 
-            if (result != null && result['encrypted_link'] != null) {
+            if (result != null && result['sign_token'] != null) {
               setState(() {
-                currentQrData = result['encrypted_link'];
+                currentQrData = result['sign_token'];
                 waitingForTap = true;
                 qrLocked = false;
                 qrPosition = null;
                 qrPageNumber = null;
               });
-
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
@@ -224,16 +223,12 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     required int page,
     required Offset offset,
   }) async {
-    // Membaca file PDF yang ada
     final fileBytes = await File(widget.filePath).readAsBytes();
-    // Objek PdfDocument dibuat di sini, lokal untuk fungsi ini.
-    // Ini adalah langkah kunci untuk mengatasi error "undefined_getter"
     final PdfDocument document = PdfDocument(inputBytes: fileBytes);
 
     final QrPainter qrPainter = QrPainter.withQr(
       qr: QrValidator.validate(
-        data:
-        'http://fakerryugan.my.id/api/signature/view-from-payload?payload=$data',
+        data: "$baseUrl/$data",
         version: QrVersions.auto,
         errorCorrectionLevel: QrErrorCorrectLevel.H,
       ).qrCode!,
@@ -242,7 +237,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       emptyColor: const Color(0xFFFFFFFF),
     );
 
-    final ui.Image qrImage = await qrPainter.toImage(qrPdfSize * 3);
+    final ui.Image qrImage = await qrPainter.toImage(qrPdfSize.toInt() * 3);
 
     final ByteData? byteData = await qrImage.toByteData(
       format: ui.ImageByteFormat.png,
@@ -260,42 +255,42 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     final PdfPage pdfPage = document.pages[pageIndex];
 
     final RenderBox pdfViewerRenderBox =
-    _pdfViewerKey.currentContext!.findRenderObject() as RenderBox;
+        _pdfViewerKey.currentContext!.findRenderObject() as RenderBox;
     final Size pdfViewerScreenSize = pdfViewerRenderBox.size;
 
-    final Size pdfPageActualSize = pdfPage.size;
+    final double currentZoom = pdfViewerController.zoomLevel;
+    final Offset currentScrollOffset = pdfViewerController.scrollOffset;
 
-    final double zoomLevel = pdfViewerController.zoomLevel;
-    final Offset scrollOffset = pdfViewerController.scrollOffset;
+    final double currentViewerWidth = pdfViewerScreenSize.width;
+    final double currentViewerHeight = pdfViewerScreenSize.height;
 
-    final double scaleX =
-        pdfPageActualSize.width / (pdfViewerScreenSize.width * zoomLevel);
-    final double scaleY =
-        pdfPageActualSize.height / (pdfViewerScreenSize.height * zoomLevel);
+    final double actualPdfWidthPerViewerPixel =
+        pdfPage.size.width / (currentViewerWidth * currentZoom);
+    final double actualPdfHeightPerViewerPixel =
+        pdfPage.size.height / (currentViewerHeight * currentZoom);
 
-    final double pdfX = (offset.dx + scrollOffset.dx) * scaleX;
-    final double pdfYFromTop = (offset.dy + scrollOffset.dy) * scaleY;
+    final double pdfX =
+        (offset.dx + currentScrollOffset.dx) * actualPdfWidthPerViewerPixel;
+    final double pdfY =
+        (offset.dy + currentScrollOffset.dy) * actualPdfHeightPerViewerPixel;
 
-    // Completed the line that was cut off previously
-    final double finalPdfY = pdfPageActualSize.height - pdfYFromTop - qrPdfSize;
-
-    // Gambar QR code ke halaman PDF
     pdfPage.graphics.drawImage(
       pdfImage,
-      Rect.fromLTWH(pdfX, finalPdfY, qrPdfSize, qrPdfSize),
+      Rect.fromLTWH(pdfX, pdfY, qrPdfSize, qrPdfSize),
     );
 
-    // Simpan PDF yang sudah dimodifikasi
     final String outputPath =
         '${widget.filePath.substring(0, widget.filePath.lastIndexOf('.'))}_signed.pdf';
     final File newFile = File(outputPath);
     await newFile.writeAsBytes(await document.save());
     document.dispose();
 
-    // Navigasi untuk memuat ulang PDF yang sudah ditandatangani
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => PdfViewerPage(filePath: outputPath)),
+      MaterialPageRoute(
+        builder: (_) =>
+            PdfViewerPage(filePath: outputPath, documentId: widget.documentId),
+      ),
     );
   }
 }
