@@ -1,4 +1,4 @@
-import 'package:android/api/token.dart'; // Assuming this contains uploadSigner
+import 'package:android/api/token.dart';
 import 'package:flutter/material.dart';
 
 Future<Map<String, dynamic>?> showInputDialog({
@@ -8,7 +8,7 @@ Future<Map<String, dynamic>?> showInputDialog({
   required TextEditingController tujuanController,
   required bool showTujuan,
   required int totalPages,
-  required int documentId, // <--- Add documentId here
+  required int documentId,
 }) async {
   int selectedPage = 1;
 
@@ -38,19 +38,11 @@ Future<Map<String, dynamic>?> showInputDialog({
                   decoration: const InputDecoration(
                     labelText: 'Alasan / Tujuan',
                     border: OutlineInputBorder(),
-                    // Add maxLines for multiline input if desired
-                    // maxLines: 3,
                   ),
                   validator: (val) =>
                       val == null || val.isEmpty ? 'Wajib diisi' : null,
                 ),
               const SizedBox(height: 10),
-              // The DropdownButtonFormField for page selection is not actually used
-              // for placing the QR code in your PdfViewerPage (it uses the current
-              // page number from pdfViewerController.pageNumber).
-              // You might want to remove this if it's not serving a purpose,
-              // or adjust the logic in PdfViewerPage to use this `selectedPage`.
-              // For now, keeping it as is, but noting its current lack of effect.
               DropdownButtonFormField<int>(
                 value: selectedPage,
                 decoration: const InputDecoration(

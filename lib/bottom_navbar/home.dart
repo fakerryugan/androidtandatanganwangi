@@ -1,7 +1,8 @@
 import 'package:android/api/token.dart';
+import 'package:android/file/fileverifikasi.dart';
 import 'package:flutter/material.dart';
 
-import 'package:android/lihatsemua.dart';
+import 'package:android/file/lihatsemua.dart';
 import 'package:android/scan_qr/barcode_scanner_page.dart';
 import 'package:android/system/systemupload.dart';
 
@@ -127,8 +128,16 @@ class _HomePageState extends State<HomePage> {
                       buildButton(Icons.upload_file, 'Upload File', () {
                         PdfPickerHelper.pickAndOpenPdf(context);
                       }),
-                      buildButton(Icons.verified, 'Verifikasi TTD', () {
+                      buildButton(Icons.verified, 'File Terverifikasi', () {
                         // Tambahkan navigasi verifikasi jika ada
+                      }),
+                      buildButton(Icons.mobile_friendly, 'Verifikasi TTD', () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => Fileverifikasi(),
+                          ),
+                        );
                       }),
                     ],
                   ),
