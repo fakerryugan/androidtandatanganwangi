@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-
 import 'package:android/api/token.dart';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -49,39 +48,20 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   @override
   Widget build(BuildContext context) {
     final file = File(widget.filePath);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit PDF', style: TextStyle(color: Colors.white)),
+        title: const Text('Edit', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF172B4C),
         centerTitle: true,
+        automaticallyImplyLeading: false,
+        leading: Container(),
       ),
       body: Stack(
         children: [
-          GestureDetector(
-            onTapDown: waitingForTap && !qrLocked
-                ? (details) {
-                    setState(() {
-                      qrPosition = details.localPosition;
-                      qrPageNumber = pdfViewerController.pageNumber;
-                      waitingForTap = false;
-                    });
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'QR Code ditempatkan. Anda bisa menggesernya atau tekan kunci.',
-                        ),
-                        duration: Duration(seconds: 3),
-                      ),
-                    );
-                  }
-                : null,
-            child: SfPdfViewer.file(
-              file,
-              key: _pdfViewerKey,
-              controller: pdfViewerController,
-            ),
+          SfPdfViewer.file(
+            file,
+            key: _pdfViewerKey,
+            controller: pdfViewerController,
           ),
           if (qrPosition != null && currentQrData != null && !qrLocked)
             Positioned(
@@ -158,62 +138,93 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                 ),
               ),
             ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(30),
+                topRight: Radius.circular(30),
+              ),
+              child: Container(
+                height: 60,
+                color: const Color(0xFF172B4C),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.arrow_back_outlined,
+                            color: Color(0xFF172B4C),
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+                      FloatingActionButton.extended(
+                        backgroundColor: Colors.white,
+                        onPressed: () async {
+                          if (waitingForTap || qrLocked) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Selesaikan penempatan QR sebelumnya atau tunggu.',
+                                ),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+
+                          final result = await showInputDialog(
+                            context: context,
+                            formKey: _formKey,
+                            nipController: nipController,
+                            tujuanController: tujuanController,
+                            showTujuan: true,
+                            totalPages: pdfViewerController.pageCount,
+                            documentId: widget.documentId,
+                          );
+
+                          if (result != null && result['sign_token'] != null) {
+                            setState(() {
+                              currentQrData = result['sign_token'];
+                              waitingForTap = true;
+                              qrLocked = false;
+                              qrPosition = null;
+                              qrPageNumber = null;
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Silakan tap di PDF untuk menempatkan QR Code. Anda bisa menggesernya.',
+                                ),
+                                duration: Duration(seconds: 4),
+                              ),
+                            );
+                          }
+                        },
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: const BorderSide(color: Colors.black, width: 2),
+                        ),
+                        label: const Text(
+                          '+ Tanda tangan',
+                          style: TextStyle(color: Colors.black),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 70),
-        child: FloatingActionButton.extended(
-          backgroundColor: Colors.white,
-          onPressed: () async {
-            if (waitingForTap || qrLocked) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Selesaikan penempatan QR sebelumnya atau tunggu.',
-                  ),
-                  duration: Duration(seconds: 2),
-                ),
-              );
-              return;
-            }
-
-            final result = await showInputDialog(
-              context: context,
-              formKey: _formKey,
-              nipController: nipController,
-              tujuanController: tujuanController,
-              showTujuan: true,
-              totalPages: pdfViewerController.pageCount,
-              documentId: widget.documentId,
-            );
-
-            if (result != null && result['sign_token'] != null) {
-              setState(() {
-                currentQrData = result['sign_token'];
-                waitingForTap = true;
-                qrLocked = false;
-                qrPosition = null;
-                qrPageNumber = null;
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Silakan tap di PDF untuk menempatkan QR Code. Anda bisa menggesernya.',
-                  ),
-                  duration: Duration(seconds: 4),
-                ),
-              );
-            }
-          },
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Colors.black, width: 2),
-          ),
-          label: const Text(
-            '+ Tanda tangan',
-            style: TextStyle(color: Colors.black),
-          ),
-        ),
       ),
     );
   }
