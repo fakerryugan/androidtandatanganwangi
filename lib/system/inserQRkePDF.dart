@@ -68,16 +68,14 @@ class QrPdfHelper {
       Rect.fromLTWH(pdfX, pdfY, qrPdfSize, qrPdfSize),
     );
 
-    final String outputPath =
-        '${filePath.substring(0, filePath.lastIndexOf('.'))}_signed.pdf';
-    await File(outputPath).writeAsBytes(await document.save());
+    await File(filePath).writeAsBytes(await document.save());
     document.dispose();
 
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => PdfViewerPage(
-          filePath: outputPath,
+          filePath: filePath,
           documentId: documentId,
           accessToken: '',
         ),

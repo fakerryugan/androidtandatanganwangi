@@ -89,9 +89,7 @@ class PdfPickerHelper {
       final token = await getToken();
       if (token == null) throw Exception('Token login tidak ditemukan');
 
-      final fileToSend = File(
-        '${filePath.substring(0, filePath.lastIndexOf('.'))}_signed.pdf',
-      );
+      final fileToSend = File(filePath);
 
       if (!await fileToSend.exists()) {
         _showMessage(context, 'File PDF baru tidak ditemukan');
