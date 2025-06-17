@@ -6,17 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-
 import 'package:android/upload_file/generateqr.dart';
 
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
   final int documentId;
+  final Map<String, dynamic>? qrData; // Tambahkan parameter untuk data QR
 
   const PdfViewerPage({
     Key? key,
     required this.filePath,
     required this.documentId,
+    this.qrData, // Parameter opsional untuk QR data
   }) : super(key: key);
 
   @override
@@ -33,16 +34,29 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   String? currentQrData;
   Offset? qrPosition;
   int? qrPageNumber;
-  bool waitingForTap = false;
   bool qrLocked = false;
   static const double qrDisplaySize = 100.0;
   static const double qrPdfSize = 100.0;
 
   @override
-  void dispose() {
-    nipController.dispose();
-    tujuanController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    // Inisialisasi QR data jika ada dari parameter
+    if (widget.qrData != null) {
+      _initializeQrFromData(widget.qrData!);
+    }
+  }
+
+  void _initializeQrFromData(Map<String, dynamic> qrData) {
+    setState(() {
+      currentQrData = qrData['sign_token'];
+      qrPageNumber = qrData['selected_page'] ?? 1;
+      // Set posisi default di tengah layar
+      qrPosition = Offset(
+        MediaQuery.of(context).size.width / 2 - qrDisplaySize / 2,
+        MediaQuery.of(context).size.height / 2 - qrDisplaySize / 2,
+      );
+    });
   }
 
   @override
@@ -58,10 +72,21 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       ),
       body: Stack(
         children: [
-          SfPdfViewer.file(
-            file,
-            key: _pdfViewerKey,
-            controller: pdfViewerController,
+          GestureDetector(
+            onTapDown: (details) {
+              // Jika QR belum dikunci, update posisi saat tap
+              if (currentQrData != null && !qrLocked) {
+                setState(() {
+                  qrPosition = details.localPosition;
+                  qrPageNumber = pdfViewerController.pageNumber;
+                });
+              }
+            },
+            child: SfPdfViewer.file(
+              file,
+              key: _pdfViewerKey,
+              controller: pdfViewerController,
+            ),
           ),
           if (qrPosition != null && currentQrData != null && !qrLocked)
             Positioned(
@@ -120,7 +145,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
                         setState(() {
                           qrLocked = true;
-                          waitingForTap = false;
                           currentQrData = null;
                           qrPosition = null;
                           qrPageNumber = null;
@@ -169,11 +193,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                       FloatingActionButton.extended(
                         backgroundColor: Colors.white,
                         onPressed: () async {
-                          if (waitingForTap || qrLocked) {
+                          if (currentQrData != null && !qrLocked) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Selesaikan penempatan QR sebelumnya atau tunggu.',
+                                  'Selesaikan penempatan QR sebelumnya.',
                                 ),
                                 duration: Duration(seconds: 2),
                               ),
@@ -192,17 +216,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                           );
 
                           if (result != null && result['sign_token'] != null) {
-                            setState(() {
-                              currentQrData = result['sign_token'];
-                              waitingForTap = true;
-                              qrLocked = false;
-                              qrPosition = null;
-                              qrPageNumber = null;
-                            });
+                            _initializeQrFromData(result);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Silakan tap di PDF untuk menempatkan QR Code. Anda bisa menggesernya.',
+                                  'QR Code telah muncul. Geser untuk memposisikan.',
                                 ),
                                 duration: Duration(seconds: 4),
                               ),
