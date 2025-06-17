@@ -78,7 +78,6 @@ class PdfPickerHelper {
     }
   }
 
-  /// Replace document PDF with signed version
   static Future<void> uploadSignedPdf({
     required BuildContext context,
     required String filePath,

@@ -32,9 +32,9 @@ class _HomePageState extends State<HomePage> {
     final userDocs = await fetchUserDocuments();
 
     setState(() {
-      name = user?['name'] ?? 'Pengguna';
-      nip = user?['nip'] ?? '-';
-      role = user?['role_aktif']?.toUpperCase() ?? '-';
+      name = user?['user']?['name'] ?? 'Pengguna';
+      nip = user?['user']?['nip'] ?? '-';
+      role = user?['user']?['role_aktif']?.toUpperCase() ?? '-';
       documents = userDocs;
       isLoading = false;
     });

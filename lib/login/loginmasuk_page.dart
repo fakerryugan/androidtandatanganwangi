@@ -47,14 +47,9 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
     if (result['statusCode'] == 200) {
       final data = result['data'];
       final token = data['access_token'];
-      final user = data['user'];
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('token', token);
-      await prefs.setString('name', user['name']);
-      await prefs.setInt('user_id', user['id']);
-      await prefs.setString('role', user['role_aktif'] ?? '');
-
       debugPrint("LOGIN BERHASIL. Pindah ke BottomNavBar...");
 
       Navigator.pushReplacement(
