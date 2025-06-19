@@ -24,7 +24,7 @@ class PdfPickerHelper {
 
       // Simpan document_id ke SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('document_id', data!['document_id']);
+      await prefs.setInt('document_id', data['document_id']);
 
       Navigator.push(
         context,

@@ -10,6 +10,11 @@ Future<String?> getToken() async {
   return prefs.getString('token');
 }
 
+Future<int?> getDocumentId() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getInt('document_id');
+}
+
 Future<Map<String, dynamic>?> fetchUserInfo() async {
   final token = await getToken();
   if (token == null) return null;
@@ -66,56 +71,114 @@ Future<http.Response?> downloadDocument(
   }
 }
 
-Future<Map<String, dynamic>?> uploadDocument(File file) async {
+Future<Map<String, dynamic>> uploadDocument(File file) async {
   final token = await getToken();
   if (token == null) throw Exception('Token tidak ditemukan');
 
-  var uri = Uri.parse('$baseUrl/documents/upload');
-  var request = http.MultipartRequest('POST', uri)
-    ..headers['Authorization'] = 'Bearer $token'
-    ..files.add(await http.MultipartFile.fromPath('file', file.path));
+  try {
+    var uri = Uri.parse('$baseUrl/documents/upload');
+    var request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(await http.MultipartFile.fromPath('file', file.path));
 
-  var response = await request.send();
-  final responseBody = await response.stream.bytesToString();
+    var response = await request.send();
+    final responseBody = await response.stream.bytesToString();
+    final data = json.decode(responseBody);
 
-  if (response.statusCode == 200) {
-    return json.decode(responseBody);
-  } else {
-    final body = json.decode(responseBody);
-    throw Exception(body['message'] ?? 'Gagal upload: ${response.statusCode}');
+    if (response.statusCode == 200) {
+      // Save document_id to SharedPreferences
+      if (data['document_id'] != null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('document_id', data['document_id']);
+      }
+
+      return {
+        'success': true,
+        'document_id': data['document_id'],
+        'file_path': data['file_path'] ?? '',
+        'message': data['message'] ?? 'Upload berhasil',
+      };
+    } else {
+      throw Exception(
+        data['message'] ?? 'Gagal upload: ${response.statusCode}',
+      );
+    }
+  } catch (e) {
+    throw Exception('Error uploading document: ${e.toString()}');
   }
 }
 
-Future<Map<String, dynamic>?> uploadSigner({
+Future<Map<String, dynamic>> cancelDocument(int documentId) async {
+  try {
+    final token = await getToken();
+    if (token == null) throw Exception('Token tidak ditemukan');
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/documents/cancel/$documentId'),
+      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+    );
+
+    final responseData = json.decode(response.body);
+
+    if (response.statusCode == 200) {
+      // Remove document_id from SharedPreferences on successful cancellation
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('document_id');
+
+      return {
+        'success': true,
+        'message': responseData['message'] ?? 'Document cancelled successfully',
+      };
+    } else {
+      return {
+        'success': false,
+        'message': responseData['message'] ?? 'Failed to cancel document',
+      };
+    }
+  } catch (e) {
+    return {'success': false, 'message': 'Network error: ${e.toString()}'};
+  }
+}
+
+Future<Map<String, dynamic>> uploadSigner({
   required int documentId,
   required String nip,
-  String? alasan, // optional kalau tidak wajib
+  String? alasan,
 }) async {
   final token = await getToken();
+  if (token == null) throw Exception('Token tidak ditemukan');
 
-  final url = Uri.parse('$baseUrl/add/$documentId');
+  try {
+    final url = Uri.parse('$baseUrl/add/$documentId');
+    final headers = {
+      'Authorization': 'Bearer $token',
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+    };
 
-  final headers = {
-    'Authorization': 'Bearer $token',
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-  };
+    final body = {'nip': nip, if (alasan != null) 'alasan': alasan};
 
-  final body = {'nip': nip, if (alasan != null) 'alasan': alasan};
+    final response = await http.post(
+      url,
+      headers: headers,
+      body: jsonEncode(body),
+    );
 
-  final response = await http.post(
-    url,
-    headers: headers,
-    body: jsonEncode(body),
-  );
+    final responseData = json.decode(response.body);
 
-  if (response.statusCode == 200) {
-    final data = jsonDecode(response.body);
-    return {'sign_token': data['sign_token'], 'signer_id': data['signer_id']};
-  } else if (response.statusCode == 409) {
-    throw Exception('Penandatangan sudah ditambahkan');
-  } else {
-    final data = jsonDecode(response.body);
-    throw Exception(data['message'] ?? 'Gagal menambahkan penandatangan');
+    if (response.statusCode == 200) {
+      return {
+        'success': true,
+        'sign_token': responseData['sign_token'],
+        'signer_id': responseData['signer_id'],
+        'message': 'Penandatangan berhasil ditambahkan',
+      };
+    } else {
+      throw Exception(
+        responseData['message'] ?? 'Gagal menambahkan penandatangan',
+      );
+    }
+  } catch (e) {
+    throw Exception('Error adding signer: ${e.toString()}');
   }
 }

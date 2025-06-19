@@ -81,7 +81,7 @@ Future<Map<String, dynamic>?> showInputDialog({
                 );
 
                 Navigator.pop(context, {
-                  'sign_token': result?['sign_token'],
+                  'sign_token': result['sign_token'],
                   'selected_page': selectedPage,
                 });
 

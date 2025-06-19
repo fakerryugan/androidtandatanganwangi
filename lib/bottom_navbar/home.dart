@@ -1,12 +1,10 @@
 import 'package:android/api/token.dart';
 import 'package:android/file/fileverifikasi.dart';
-import 'package:android/upload_file/menampilkanpdf.dart';
 import 'package:android/upload_file/upload.dart';
 import 'package:flutter/material.dart';
 
 import 'package:android/file/lihatsemua.dart';
 import 'package:android/scan_qr/barcode_scanner_page.dart';
-import 'package:android/system/systemupload.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
