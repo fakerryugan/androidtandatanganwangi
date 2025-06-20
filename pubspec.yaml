@@ -43,7 +43,7 @@ dependencies:
   image: ^4.2.0
   pdfx: ^2.4.0
   open_filex: ^4.7.0
-
+  flutter_pdfview: ^1.4.0+1
 
 
 dev_dependencies:

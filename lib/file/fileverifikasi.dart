@@ -1,51 +1,178 @@
-import 'package:android/api/token.dart';
+import 'package:android/verifikasi/verifikasi.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:android/api/token.dart';
 
 class Fileverifikasi extends StatefulWidget {
   const Fileverifikasi({super.key});
 
   @override
-  State<Fileverifikasi> createState() => _Fileverifikasi();
+  State<Fileverifikasi> createState() => _FileverifikasiState();
 }
 
-class _Fileverifikasi extends State<Fileverifikasi> {
+class _FileverifikasiState extends State<Fileverifikasi> {
   bool isLoading = true;
   List<Map<String, dynamic>> documents = [];
+  String errorMessage = '';
 
   @override
   void initState() {
     super.initState();
-    loadDocuments();
+    _muatDokumen();
   }
 
-  Future<void> loadDocuments() async {
+  Future<void> _muatDokumen() async {
     try {
       final token = await getToken();
       final response = await http.get(
-        Uri.parse('$baseUrl/signatures/user'),
+        Uri.parse('$baseUrl/signature/user'),
         headers: {'Authorization': 'Bearer $token'},
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final List docs = data['documents'];
-        setState(() {
-          documents = docs.map((e) => e as Map<String, dynamic>).toList();
-          isLoading = false;
-        });
+        if (data['status'] == true) {
+          setState(() {
+            documents = List<Map<String, dynamic>>.from(data['documents']);
+            errorMessage = '';
+          });
+        } else {
+          throw Exception(data['message'] ?? 'Gagal memuat dokumen');
+        }
       } else {
-        throw Exception('Gagal memuat dokumen');
+        throw Exception('HTTP Error ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
       setState(() {
-        isLoading = false;
+        errorMessage = 'Error: ${e.toString()}';
       });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
     }
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        children: [
+          ClipOval(
+            child: SizedBox(
+              width: 50,
+              height: 50,
+              child: Image.asset('assets/images/pp.jpg', fit: BoxFit.cover),
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Text('Cari file', style: TextStyle(fontSize: 15)),
+          const Spacer(),
+          const Icon(Icons.person, size: 40),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Text(
+            'Dokumen Perlu Verifikasi',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentList() {
+    return RefreshIndicator(
+      onRefresh: _muatDokumen,
+      child: ListView.builder(
+        itemCount: documents.length,
+        itemBuilder: (context, index) {
+          final doc = documents[index];
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: ListTile(
+              leading: const Icon(Icons.description, color: Colors.blue),
+              title: Text(doc['original_name'] ?? 'Dokumen Tanpa Nama'),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Tanggal: ${doc['uploaded_at'] ?? '-'}'),
+                  Text('Tujuan: ${doc['tujuan'] ?? '-'}'),
+                ],
+              ),
+              trailing: const Icon(Icons.arrow_forward),
+              onTap: () => _tampilkanDialogVerifikasi(context, doc),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _tampilkanDialogVerifikasi(
+    BuildContext context,
+    Map<String, dynamic> doc,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(doc['original_name'] ?? 'Verifikasi Dokumen'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Tanggal: ${doc['uploaded_at'] ?? '-'}'),
+            const SizedBox(height: 10),
+            Text('Tujuan: ${doc['tujuan'] ?? '-'}'),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PdfReviewScreen(
+                      signToken: doc['sign_token'],
+                      accessToken: doc['access_token'],
+                      documentId: doc['document_id'].toString(),
+                    ),
+                  ),
+                );
+              },
+              child: const Text(
+                'Lihat Dokumen Lengkap',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -54,8 +181,6 @@ class _Fileverifikasi extends State<Fileverifikasi> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.centerRight,
-            end: Alignment.centerLeft,
             colors: [
               Color.fromRGBO(127, 146, 248, 1),
               Color.fromRGBO(175, 219, 248, 1),
@@ -65,122 +190,22 @@ class _Fileverifikasi extends State<Fileverifikasi> {
         child: Column(
           children: [
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: Row(
-                children: [
-                  ClipOval(
-                    child: SizedBox(
-                      width: 50,
-                      height: 50,
-                      child: Image.asset(
-                        'assets/images/pp.jpg',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Cari file',
-                    style: TextStyle(fontSize: 15, color: Colors.black),
-                  ),
-                  const Spacer(),
-                  const Icon(Icons.person, size: 40, color: Colors.black),
-                ],
-              ),
-            ),
+            _buildHeader(),
             const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Text(
-                    'Terbaru',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
+            _buildSectionTitle(),
             Expanded(
               child: Container(
                 color: Colors.white,
-                width: double.infinity,
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
+                    : errorMessage.isNotEmpty
+                    ? Center(child: Text(errorMessage))
                     : documents.isNotEmpty
-                    ? ListView.builder(
-                        itemCount: documents.length,
-                        itemBuilder: (context, index) {
-                          final file = documents[index];
-                          return ListTile(
-                            leading: const Icon(
-                              Icons.insert_drive_file,
-                              color: Colors.blue,
-                            ),
-                            title: Text(
-                              file['original_name'] ?? 'Nama tidak tersedia',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              'Diunggah: ${file['uploaded_at'] ?? ''}\nTujuan: ${file['tujuan'] ?? "-"}',
-                            ),
-                            trailing: const Icon(
-                              Icons.arrow_forward_ios,
-                              size: 16,
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => DummySignPage(
-                                    documentId: file['document_id'],
-                                    signToken: file['sign_token'],
-                                    accessToken: file['access_token'],
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      )
-                    : const Center(
-                        child: Text('Belum ada dokumen untuk diverifikasi.'),
-                      ),
+                    ? _buildDocumentList()
+                    : const Center(child: Text('Tidak ada dokumen')),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class DummySignPage extends StatelessWidget {
-  final int documentId;
-  final String signToken;
-  final String accessToken;
-
-  const DummySignPage({
-    super.key,
-    required this.documentId,
-    required this.signToken,
-    required this.accessToken,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Tanda Tangan Dokumen')),
-      body: Center(
-        child: Text(
-          'Dokumen ID: $documentId\nSign Token: $signToken\nAccess Token: $accessToken',
-          textAlign: TextAlign.center,
         ),
       ),
     );
