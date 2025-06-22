@@ -9,7 +9,7 @@ import 'package:flutter_pdfview/flutter_pdfview.dart';
 class PdfReviewScreen extends StatefulWidget {
   final String signToken;
   final String documentId;
-  final String accessToken; // Keep this for PDF viewing
+  final String accessToken;
 
   const PdfReviewScreen({
     super.key,

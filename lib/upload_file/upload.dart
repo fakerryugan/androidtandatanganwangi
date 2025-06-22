@@ -1,9 +1,9 @@
 import 'dart:io';
-import 'package:android/api/token.dart'; // Assuming this contains uploadDocument
+import 'package:android/api/token.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../upload_file/menampilkanpdf.dart'; // Assuming PdfViewerPage is here
+import '../upload_file/menampilkanpdf.dart';
 
 class PdfPickerHelper {
   static Future<void> pickAndOpenPdf(BuildContext context) async {
@@ -21,8 +21,6 @@ class PdfPickerHelper {
 
     try {
       final data = await uploadDocument(file);
-
-      // Simpan document_id ke SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('document_id', data['document_id']);
 

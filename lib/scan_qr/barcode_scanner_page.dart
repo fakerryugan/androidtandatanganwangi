@@ -1,5 +1,6 @@
 import 'package:android/scan_qr/barcode_scanner_service.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class BarcodeScannerPage extends StatefulWidget {
   const BarcodeScannerPage({super.key});
@@ -22,23 +23,23 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
   Future<void> _startScan() async {
     final scanResult = await BarcodeScannerService.scanBarcode();
 
-    if (scanResult.startsWith('http')) {
-      try {
-        final signToken = Uri.parse(scanResult).pathSegments.last;
-        final data = await BarcodeScannerService.fetchDocumentDetail(signToken);
-        setState(() {
-          documentData = data;
-          isLoading = false;
-        });
-      } catch (e) {
-        setState(() {
-          statusMessage = 'Gagal mengambil detail: $e';
-          isLoading = false;
-        });
-      }
-    } else {
+    if (!scanResult.startsWith('http')) {
       setState(() {
-        statusMessage = scanResult;
+        statusMessage = 'QR code tidak valid: bukan URL';
+        isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final data = await BarcodeScannerService.DocumentDetail(scanResult);
+      setState(() {
+        documentData = data;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        statusMessage = 'Gagal mengambil detail: $e';
         isLoading = false;
       });
     }
@@ -127,41 +128,137 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _buildInfoRow('Judul', documentData!['original_name']),
+          const Text(
+            'Judul',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            documentData!['original_name'] ?? '-',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14),
+          ),
+          const Divider(height: 24),
+          const Text(
+            'Tanggal Pengajuan',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            documentData!['uploaded_at'] ?? '-',
+            style: const TextStyle(fontSize: 14),
+          ),
+          const Divider(height: 24),
+          const Text(
+            'Diajukan Kepada',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
           const SizedBox(height: 8),
-          _buildInfoRow('Diajukan Kepada', documentData!['tujuan']),
+          ..._buildSignerList(documentData!['signers'] ?? []),
+          const Divider(height: 24),
+          const Text(
+            'Status Dokumen',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
           const SizedBox(height: 8),
-          _buildInfoRow('Status', documentData!['status']),
-          const SizedBox(height: 8),
-          _buildInfoRow('Signer ID', documentData!['signer_id'].toString()),
-          const SizedBox(height: 8),
-          _buildInfoRow('Download URL', documentData!['download_url']),
+          _buildStatusBox(
+            documentData!['current_status'],
+            documentData!['download_url'],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String? value) {
-    return RichText(
-      text: TextSpan(
-        text: '$label: ',
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.black,
-          fontSize: 14,
+  Widget _buildStatusBox(String? status, String? downloadUrl) {
+    final isApproved = status == 'approved' || status == 'done';
+
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          decoration: BoxDecoration(
+            color: isApproved ? Colors.green : Colors.yellow,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                isApproved ? 'Disetujui' : 'Proses',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: Colors.black,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                isApproved ? Icons.check_circle_outline : Icons.access_time,
+                size: 16,
+                color: Colors.black,
+              ),
+            ],
+          ),
         ),
-        children: [
-          TextSpan(
-            text: value ?? '-',
-            style: const TextStyle(
-              fontWeight: FontWeight.normal,
-              color: Colors.black87,
+        if (isApproved && downloadUrl != null) ...[
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () {
+              _launchURL(downloadUrl);
+            },
+            child: Text(
+              'Download Dokumen',
+              style: TextStyle(
+                color: Colors.blue.shade700,
+                decoration: TextDecoration.underline,
+                fontSize: 14,
+              ),
             ),
           ),
         ],
-      ),
+      ],
     );
+  }
+
+  List<Widget> _buildSignerList(List signers) {
+    return signers.map((signer) {
+      IconData icon;
+      if (signer['status'] == 'approved') {
+        icon = Icons.check_circle_outline;
+      } else if (signer['status'] == 'rejected') {
+        icon = Icons.cancel_outlined;
+      } else {
+        icon = Icons.access_time;
+      }
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              signer['name'] ?? 'Unknown',
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(width: 8),
+            Icon(icon, size: 16),
+          ],
+        ),
+      );
+    }).toList();
+  }
+
+  void _launchURL(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Gagal membuka link')));
+    }
   }
 }

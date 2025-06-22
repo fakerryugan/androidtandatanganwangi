@@ -12,9 +12,7 @@ class BarcodeScannerService {
     }
   }
 
-  static Future<Map<String, dynamic>> fetchDocumentDetail(
-    String signToken,
-  ) async {
+  static Future<Map<String, dynamic>> DocumentDetail(String signToken) async {
     final response = await http.get(
       Uri.parse('$signToken'),
       headers: {'Accept': 'application/json'},

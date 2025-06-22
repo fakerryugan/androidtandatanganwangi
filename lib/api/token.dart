@@ -10,11 +10,6 @@ Future<String?> getToken() async {
   return prefs.getString('token');
 }
 
-Future<int?> getDocumentId() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getInt('document_id');
-}
-
 Future<Map<String, dynamic>?> fetchUserInfo() async {
   final token = await getToken();
   if (token == null) return null;
