@@ -54,9 +54,7 @@ class LoginPage extends StatelessWidget {
                   height: 175,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(
-                      0,
-                    ), // opsional, untuk sudut membulat
+                    borderRadius: BorderRadius.circular(0),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 25),
                   child: Center(

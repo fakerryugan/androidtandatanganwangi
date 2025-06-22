@@ -32,9 +32,9 @@ class _HomePageState extends State<HomePage> {
     final userDocs = await fetchUserDocuments();
 
     setState(() {
-      name = user?['user']?['name'] ?? 'Pengguna';
-      nip = user?['user']?['nip'] ?? '-';
-      role = user?['user']?['role_aktif']?.toUpperCase() ?? '-';
+      name = user?['name'] ?? 'Pengguna';
+      nip = user?['nip'] ?? '-';
+      role = user?['role_aktif']?.toUpperCase() ?? '-';
       documents = userDocs;
       isLoading = false;
     });
@@ -128,9 +128,7 @@ class _HomePageState extends State<HomePage> {
                       buildButton(Icons.upload_file, 'Upload File', () {
                         PdfPickerHelper.pickAndOpenPdf(context);
                       }),
-                      buildButton(Icons.verified, 'File Terverifikasi', () {
-                        // Tambahkan navigasi verifikasi jika ada
-                      }),
+                      buildButton(Icons.verified, 'File Terverifikasi', () {}),
                       buildButton(Icons.mobile_friendly, 'Verifikasi TTD', () {
                         Navigator.push(
                           context,

@@ -71,9 +71,7 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
     try {
       final token = await getToken();
       final response = await http.post(
-        Uri.parse(
-          '$baseUrl/documents/signature/${widget.signToken}',
-        ), // Use signToken here
+        Uri.parse('$baseUrl/documents/signature/${widget.signToken}'),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
@@ -88,8 +86,6 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(responseData['message'])));
-
-        // Navigate back with result
         Navigator.pop(context, {
           'status': status,
           'document_verified': responseData['document_verified'] ?? false,

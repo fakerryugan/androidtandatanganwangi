@@ -15,11 +15,17 @@ import 'package:http_parser/http_parser.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey();
 
+// Add this extension for Offset clamping
+extension OffsetClamp on Offset {
+  Offset clamp(Offset min, Offset max) {
+    return Offset(dx.clamp(min.dx, max.dx), dy.clamp(min.dy, max.dy));
+  }
+}
+
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
   final int documentId;
   final Map<String, dynamic>? qrData;
-  final bool qrLocked;
 
   static const double qrDisplaySize = 100.0;
   static const double qrPdfSize = 100.0;
@@ -29,7 +35,6 @@ class PdfViewerPage extends StatefulWidget {
     required this.filePath,
     required this.documentId,
     this.qrData,
-    this.qrLocked = false,
   }) : super(key: key);
 
   @override
@@ -43,54 +48,26 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   final TextEditingController tujuanController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  String? currentQrData;
-  Offset? qrPosition;
-  int? qrPageNumber;
-  late bool qrLocked;
+  List<Map<String, dynamic>> qrCodes = [];
   bool _isProcessing = false;
   bool _isSending = false;
+  late String _currentPdfPath;
 
   @override
   void initState() {
     super.initState();
-    qrLocked = widget.qrLocked;
+    _currentPdfPath = widget.filePath;
     if (widget.qrData != null) {
-      _initializeQrFromData(widget.qrData!);
-    }
-  }
-
-  void _initializeQrFromData(Map<String, dynamic> qrData) {
-    if (mounted) {
-      setState(() {
-        currentQrData = qrData['sign_token'];
-        qrPageNumber = qrData['selected_page'] ?? 1;
-        qrPosition = Offset(
+      qrCodes.add({
+        ...widget.qrData!,
+        'position': Offset(
           MediaQuery.of(context).size.width / 2 -
               PdfViewerPage.qrDisplaySize / 2,
           MediaQuery.of(context).size.height / 2 -
               PdfViewerPage.qrDisplaySize / 2,
-        );
-      });
-    }
-  }
-
-  Future<void> _safePdfOperation(Function operation) async {
-    if (!mounted) return;
-
-    setState(() => _isProcessing = true);
-    try {
-      await operation();
-    } catch (e) {
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          duration: const Duration(seconds: 3),
         ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
+        'locked': true,
+      });
     }
   }
 
@@ -113,7 +90,14 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           height: 60,
           color: const Color(0xFF172B4C),
           child: Center(
-            child: qrLocked ? _buildSendButton() : _buildBackButton(),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildBackButton(),
+                if (qrCodes.isNotEmpty && qrCodes.any((q) => q['locked']))
+                  _buildSendButton(),
+              ],
+            ),
           ),
         ),
       ),
@@ -134,77 +118,56 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   }
 
   Widget _buildSendButton() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        _buildBackButton(),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.green,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: _isSending
-              ? const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: CircularProgressIndicator(color: Colors.white),
-                )
-              : IconButton(
-                  icon: const Icon(Icons.send, color: Colors.white),
-                  onPressed: _sendDocument,
-                ),
-        ),
-      ],
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.green,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: _isSending
+          ? const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: CircularProgressIndicator(color: Colors.white),
+            )
+          : IconButton(
+              icon: const Icon(Icons.send, color: Colors.white),
+              onPressed: _sendDocument,
+            ),
     );
   }
 
   Future<void> _sendDocument() async {
     try {
-      if (!mounted) return;
       setState(() => _isSending = true);
-
-      // 1. Persiapan token
       final prefs = await SharedPreferences.getInstance();
       final authToken = prefs.getString('token');
       if (authToken == null) throw Exception('Token tidak valid');
 
-      // 2. Cek keberadaan file
-      final file = File(widget.filePath);
-      if (!await file.exists()) throw Exception('File tidak ditemukan');
-
-      // 3. Membuat request multipart
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl/documents/replace/${widget.documentId}'),
       );
-
-      // 4. Menambahkan headers dan file
       request.headers['Authorization'] = 'Bearer $authToken';
       request.files.add(
         await http.MultipartFile.fromPath(
           'new_file',
-          file.path,
+          _currentPdfPath,
           contentType: MediaType('application', 'pdf'),
         ),
       );
 
-      // 5. Mengirim request
       var response = await request.send();
       var responseBody = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {
-        // Berhasil
         scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(content: Text('Dokumen berhasil dikirim!')),
+          const SnackBar(content: Text('Dokumen berhasil dikirim!')),
         );
 
-        // Navigasi ke home
-        if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const MyBottomNavBar()),
-            (route) => false,
-          );
-        }
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MyBottomNavBar()),
+          (route) => false,
+        );
       } else {
         throw Exception(
           jsonDecode(responseBody)['message'] ?? 'Gagal mengirim dokumen',
@@ -273,7 +236,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
   Future<void> _cancelDocumentRequest(String authToken) async {
     try {
-      if (!mounted) return;
       setState(() => _isProcessing = true);
       final response = await cancelDocument(widget.documentId);
 
@@ -287,14 +249,10 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           ),
         );
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const MyBottomNavBar()),
-              (route) => false,
-            );
-          }
-        });
+        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const MyBottomNavBar()),
+          (route) => false,
+        );
       } else {
         scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
@@ -307,22 +265,121 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         SnackBar(content: Text('Error: ${e.toString()}')),
       );
     } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _saveAllQrCodesToPdf() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+
+    try {
+      final scaffold = scaffoldMessengerKey.currentState;
+      scaffold?.showSnackBar(
+        const SnackBar(content: Text('Menyimpan QR ke PDF...')),
+      );
+
+      final originalFileBytes = await File(widget.filePath).readAsBytes();
+      final PdfDocument document = PdfDocument(inputBytes: originalFileBytes);
+
+      final unlockedQrs = qrCodes.where((q) => q['locked'] != true).toList();
+
+      if (unlockedQrs.isEmpty) {
+        scaffold?.showSnackBar(
+          const SnackBar(content: Text('Tidak ada QR yang perlu disimpan')),
+        );
+        return;
       }
+
+      for (final qr in unlockedQrs) {
+        final qrPainter = QrPainter.withQr(
+          qr: QrValidator.validate(
+            data: "${baseUrl}/view/${qr['sign_token']}",
+            version: QrVersions.auto,
+            errorCorrectionLevel: QrErrorCorrectLevel.H,
+          ).qrCode!,
+          gapless: true,
+          color: const Color(0xFF000000),
+          emptyColor: const Color(0xFFFFFFFF),
+        );
+
+        final ui.Image qrImage = await qrPainter.toImage(
+          PdfViewerPage.qrPdfSize,
+        );
+        final ByteData? byteData = await qrImage.toByteData(
+          format: ui.ImageByteFormat.png,
+        );
+        if (byteData == null) continue;
+
+        final Uint8List bytes = byteData.buffer.asUint8List();
+        final PdfBitmap pdfImage = PdfBitmap(bytes);
+
+        final int pageIndex = (qr['selected_page'] ?? 1) - 1;
+        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+
+        final PdfPage pdfPage = document.pages[pageIndex];
+        final Offset position = qr['position'] ?? Offset.zero;
+
+        final double zoomLevel = pdfViewerController.zoomLevel;
+        final Size pageSize = pdfPage.size;
+        final Size viewSize = _pdfViewerKey.currentContext?.size ?? Size.zero;
+
+        final double scaleX = pageSize.width / (viewSize.width * zoomLevel);
+        final double scaleY = pageSize.height / (viewSize.height * zoomLevel);
+
+        final double pdfX = position.dx * scaleX;
+        final double pdfY = position.dy * scaleY;
+        final double qrSizeInPdf = PdfViewerPage.qrPdfSize * scaleX;
+
+        pdfPage.graphics.drawImage(
+          pdfImage,
+          Rect.fromLTWH(
+            pdfX.clamp(0, pageSize.width - qrSizeInPdf),
+            pdfY.clamp(0, pageSize.height - qrSizeInPdf),
+            qrSizeInPdf,
+            qrSizeInPdf,
+          ),
+        );
+      }
+
+      final tempPath =
+          '${Directory.systemTemp.path}/temp_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      await File(tempPath).writeAsBytes(await document.save());
+      document.dispose();
+
+      await File(_currentPdfPath).delete();
+      await File(tempPath).rename(_currentPdfPath);
+
+      setState(() {
+        qrCodes = qrCodes.map((qr) => {...qr, 'locked': true}).toList();
+      });
+
+      scaffold?.showSnackBar(
+        const SnackBar(content: Text('QR berhasil disimpan!')),
+      );
+    } catch (e) {
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final file = File(widget.filePath);
     return Scaffold(
       appBar: _buildAppBar(context),
       body: Stack(
         children: [
           GestureDetector(
             onTapDown: (details) {
-              if (currentQrData != null && !qrLocked) {
+              final unlockedQr = qrCodes.firstWhere(
+                (q) => q['locked'] != true,
+                orElse: () => {},
+              );
+
+              if (unlockedQr.isNotEmpty) {
                 final pdfViewerSize =
                     _pdfViewerKey.currentContext?.size ?? Size.zero;
                 final newPosition = Offset(
@@ -337,236 +394,114 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                 );
 
                 if (_isValidPosition(newPosition, pdfViewerSize)) {
-                  if (mounted) {
-                    setState(() {
-                      qrPosition = newPosition;
-                      qrPageNumber = pdfViewerController.pageNumber;
-                    });
-                  }
+                  setState(() {
+                    unlockedQr['position'] = newPosition;
+                    unlockedQr['selected_page'] =
+                        pdfViewerController.pageNumber;
+                  });
                 }
               }
             },
             child: SfPdfViewer.file(
-              file,
+              File(_currentPdfPath),
               key: _pdfViewerKey,
               controller: pdfViewerController,
             ),
           ),
-          if (qrPosition != null && currentQrData != null && !qrLocked)
-            Positioned(
-              left: qrPosition!.dx,
-              top: qrPosition!.dy,
+          ...qrCodes.where((qr) => !qr['locked']).map((qr) {
+            return Positioned(
+              left: qr['position']?.dx ?? 0,
+              top: qr['position']?.dy ?? 0,
               child: GestureDetector(
                 onPanUpdate: (details) {
                   final pdfViewerSize =
                       _pdfViewerKey.currentContext?.size ?? Size.zero;
-                  final newPosition = Offset(
-                    qrPosition!.dx + details.delta.dx,
-                    qrPosition!.dy + details.delta.dy,
-                  );
+                  final newPosition =
+                      Offset(
+                        (qr['position']?.dx ?? 0) + details.delta.dx,
+                        (qr['position']?.dy ?? 0) + details.delta.dy,
+                      ).clamp(
+                        Offset.zero,
+                        Offset(
+                          pdfViewerSize.width - PdfViewerPage.qrDisplaySize,
+                          pdfViewerSize.height - PdfViewerPage.qrDisplaySize,
+                        ),
+                      );
 
-                  if (_isValidPosition(newPosition, pdfViewerSize)) {
-                    if (mounted) {
-                      setState(() => qrPosition = newPosition);
-                    }
-                  }
+                  setState(() => qr['position'] = newPosition);
                 },
                 child: Container(
                   width: PdfViewerPage.qrDisplaySize,
                   height: PdfViewerPage.qrDisplaySize,
-                  color: Colors.white,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.red, width: 2),
+                  ),
                   child: QrImageView(
-                    data: "${baseUrl}/$currentQrData",
-                    version: QrVersions.auto,
+                    data: "${baseUrl}/view/${qr['sign_token']}",
                     size: PdfViewerPage.qrDisplaySize,
-                    padding: const EdgeInsets.all(5.0),
                   ),
                 ),
               ),
-            ),
+            );
+          }).toList(),
           _buildBottomNavigation(),
           if (_isProcessing) const Center(child: CircularProgressIndicator()),
         ],
       ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 70.0),
-        child: currentQrData != null && !qrLocked
-            ? FloatingActionButton.extended(
-                backgroundColor: Colors.white,
-                onPressed: () => _safePdfOperation(() async {
-                  scaffoldMessengerKey.currentState?.showSnackBar(
-                    const SnackBar(
-                      content: Text('Menyimpan QR ke PDF...'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+      floatingActionButton: Visibility(
+        visible: !_isProcessing,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 70.0),
+          child: FloatingActionButton.extended(
+            backgroundColor: Colors.white,
+            onPressed: () async {
+              if (qrCodes.any((q) => !q['locked'])) {
+                await _saveAllQrCodesToPdf();
+              } else {
+                final result = await showInputDialog(
+                  context: context,
+                  formKey: _formKey,
+                  nipController: nipController,
+                  tujuanController: tujuanController,
+                  showTujuan: true,
+                  totalPages: pdfViewerController.pageCount,
+                  documentId: widget.documentId,
+                );
 
-                  await insertQrToPdfDirectly(
-                    data: currentQrData!,
-                    page: qrPageNumber!,
-                    offset: qrPosition!,
-                  );
-
-                  if (mounted) {
-                    setState(() {
-                      qrLocked = true;
-                      currentQrData = null;
-                      qrPosition = null;
-                      qrPageNumber = null;
-                    });
-                  }
-
-                  scaffoldMessengerKey.currentState?.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'QR berhasil disimpan! Sekarang Anda bisa mengirim dokumen.',
+                if (result != null && result['sign_token'] != null) {
+                  setState(() {
+                    qrCodes.add({
+                      'sign_token': result['sign_token'],
+                      'selected_page': result['selected_page'],
+                      'position': Offset(
+                        MediaQuery.of(context).size.width / 2 -
+                            PdfViewerPage.qrDisplaySize / 2,
+                        MediaQuery.of(context).size.height / 2 -
+                            PdfViewerPage.qrDisplaySize / 2,
                       ),
-                      duration: Duration(seconds: 3),
-                    ),
-                  );
-                }),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-                label: const Text(
-                  'Simpan QR',
-                  style: TextStyle(color: Colors.black),
-                ),
-                icon: const Icon(Icons.save, color: Colors.black),
-              )
-            : FloatingActionButton.extended(
-                backgroundColor: Colors.white,
-                onPressed: _isProcessing
-                    ? null
-                    : () async {
-                        if (currentQrData != null && !qrLocked) {
-                          scaffoldMessengerKey.currentState?.showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Selesaikan penempatan QR sebelumnya.',
-                              ),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                          return;
-                        }
-
-                        final result = await showInputDialog(
-                          context: context,
-                          formKey: _formKey,
-                          nipController: nipController,
-                          tujuanController: tujuanController,
-                          showTujuan: true,
-                          totalPages: pdfViewerController.pageCount,
-                          documentId: widget.documentId,
-                        );
-
-                        if (result != null && result['sign_token'] != null) {
-                          _initializeQrFromData(result);
-                          scaffoldMessengerKey.currentState?.showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'QR Code telah muncul. Geser untuk memposisikan.',
-                              ),
-                              duration: Duration(seconds: 4),
-                            ),
-                          );
-                        }
-                      },
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: const BorderSide(color: Colors.black, width: 2),
-                ),
-                label: const Text(
-                  '+ Tanda tangan',
-                  style: TextStyle(color: Colors.black),
-                ),
-                icon: const Icon(Icons.edit, color: Colors.black),
-              ),
-      ),
-    );
-  }
-
-  Future<void> insertQrToPdfDirectly({
-    required String data,
-    required int page,
-    required Offset offset,
-  }) async {
-    final fileBytes = await File(widget.filePath).readAsBytes();
-    final PdfDocument document = PdfDocument(inputBytes: fileBytes);
-
-    final QrPainter qrPainter = QrPainter.withQr(
-      qr: QrValidator.validate(
-        data: "${baseUrl}/$data",
-        version: QrVersions.auto,
-        errorCorrectionLevel: QrErrorCorrectLevel.H,
-      ).qrCode!,
-      gapless: true,
-      color: const Color(0xFF000000),
-      emptyColor: const Color(0xFFFFFFFF),
-    );
-
-    final ui.Image qrImage = await qrPainter.toImage(PdfViewerPage.qrPdfSize);
-    final ByteData? byteData = await qrImage.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
-    if (byteData == null) {
-      throw Exception('Failed to convert QR image to bytes.');
-    }
-    final Uint8List bytes = byteData.buffer.asUint8List();
-    final PdfBitmap pdfImage = PdfBitmap(bytes);
-
-    final int pageIndex = page - 1;
-    if (pageIndex < 0 || pageIndex >= document.pages.count) {
-      throw Exception('Invalid page number: $page');
-    }
-    final PdfPage pdfPage = document.pages[pageIndex];
-
-    final RenderBox pdfViewerRenderBox =
-        _pdfViewerKey.currentContext!.findRenderObject() as RenderBox;
-    final Size pdfViewerSize = pdfViewerRenderBox.size;
-
-    final double zoomLevel = pdfViewerController.zoomLevel;
-    final Offset scrollOffset = pdfViewerController.scrollOffset;
-
-    final double pdfPageWidthInViewer = pdfPage.size.width / zoomLevel;
-    final double pdfPageHeightInViewer = pdfPage.size.height / zoomLevel;
-
-    final double pdfX =
-        (offset.dx + scrollOffset.dx) *
-        (pdfPage.size.width / pdfPageWidthInViewer);
-    final double pdfY =
-        (offset.dy + scrollOffset.dy) *
-        (pdfPage.size.height / pdfPageHeightInViewer);
-
-    final double qrSizeInPdf =
-        PdfViewerPage.qrPdfSize * (pdfPage.size.width / pdfPageWidthInViewer);
-    final double adjustedX = pdfX.clamp(0, pdfPage.size.width - qrSizeInPdf);
-    final double adjustedY = pdfY.clamp(0, pdfPage.size.height - qrSizeInPdf);
-
-    pdfPage.graphics.drawImage(
-      pdfImage,
-      Rect.fromLTWH(adjustedX, adjustedY, qrSizeInPdf, qrSizeInPdf),
-    );
-
-    final String outputPath =
-        '${widget.filePath.substring(0, widget.filePath.lastIndexOf('.'))}_signed.pdf';
-    final File newFile = File(outputPath);
-    await newFile.writeAsBytes(await document.save());
-    document.dispose();
-
-    if (mounted) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => PdfViewerPage(
-            filePath: outputPath,
-            documentId: widget.documentId,
-            qrLocked: true, // Maintain the locked status
+                      'locked': false,
+                    });
+                  });
+                }
+              }
+            },
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: Colors.black, width: 2),
+            ),
+            label: Text(
+              qrCodes.any((q) => !q['locked'])
+                  ? 'Simpan Semua QR'
+                  : '+ Tanda Tangan',
+              style: const TextStyle(color: Colors.black),
+            ),
+            icon: Icon(
+              qrCodes.any((q) => !q['locked']) ? Icons.save : Icons.edit,
+              color: Colors.black,
+            ),
           ),
         ),
-      );
-    }
+      ),
+    );
   }
 }
