@@ -95,7 +95,6 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
           'document_verified': responseData['document_verified'] ?? false,
         });
       } else if (response.statusCode == 409) {
-        // Handle already processed case
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(responseData['message'])));
@@ -186,28 +185,58 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Expanded(
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color.fromARGB(255, 250, 250, 248),
+                  border: Border.all(
+                    color: const Color.fromARGB(255, 250, 250, 248),
+                    width: 2,
+                  ),
+                ),
                 child: IconButton(
                   icon: const Icon(
                     Icons.arrow_back_outlined,
-                    color: Colors.white,
+                    color: Color(0xFF172B4C),
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
+              const SizedBox(width: 40),
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color.fromARGB(255, 255, 6, 6),
+                  border: Border.all(
+                    color: const Color.fromARGB(255, 255, 6, 6),
+                    width: 2,
+                  ),
+                ),
                 child: IconButton(
-                  icon: const Icon(Icons.close, color: Color(0xFFB80101)),
+                  icon: const Icon(
+                    Icons.close,
+                    color: Color.fromARGB(255, 203, 203, 203),
+                  ),
                   onPressed: _confirmRejectAction,
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
+              const SizedBox(width: 40),
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color.fromARGB(255, 8, 224, 76),
+                  border: Border.all(
+                    color: const Color.fromARGB(255, 8, 224, 76),
+                    width: 2,
+                  ),
+                ),
                 child: IconButton(
-                  icon: const Icon(Icons.verified, color: Color(0xFF33F91D)),
+                  icon: const Icon(
+                    Icons.verified,
+                    color: Color.fromARGB(255, 255, 255, 255),
+                  ),
                   onPressed: _confirmApproveAction,
                 ),
               ),
@@ -245,7 +274,7 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
         PDFView(
           filePath: _pdfPath!,
           enableSwipe: true,
-          swipeHorizontal: true,
+          swipeHorizontal: false,
           autoSpacing: false,
           pageFling: false,
           onRender: (pages) => setState(() => _totalPages = pages),

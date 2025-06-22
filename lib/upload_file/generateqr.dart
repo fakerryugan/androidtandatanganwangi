@@ -23,10 +23,10 @@ Future<Map<String, dynamic>?> showInputDialog({
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Text('Tujuan Surat'),
               TextFormField(
                 controller: tujuanController,
                 decoration: const InputDecoration(
-                  labelText: 'Tujuan Surat',
                   hintText: 'Masukkan tujuan...',
                   border: OutlineInputBorder(),
                 ),
@@ -34,13 +34,12 @@ Future<Map<String, dynamic>?> showInputDialog({
                     val == null || val.isEmpty ? 'Wajib diisi' : null,
               ),
               const SizedBox(height: 12),
+              Text('Ditujukan untuk'),
               TextFormField(
                 controller: nipController,
                 decoration: const InputDecoration(
-                  labelText: 'Ditujukan untuk',
                   hintText: 'Kepada...',
                   border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.arrow_drop_down),
                 ),
                 validator: (val) =>
                     val == null || val.isEmpty ? 'Wajib diisi' : null,
