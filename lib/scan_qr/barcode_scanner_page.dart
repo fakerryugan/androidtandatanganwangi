@@ -205,18 +205,19 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
         ),
         if (isApproved && downloadUrl != null) ...[
           const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () {
+          ElevatedButton(
+            onPressed: () {
               _launchURL(downloadUrl);
             },
-            child: Text(
-              'Download Dokumen',
-              style: TextStyle(
-                color: Colors.blue.shade700,
-                decoration: TextDecoration.underline,
-                fontSize: 14,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue.shade700,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
+            child: const Text('Unduh Dokumen', style: TextStyle(fontSize: 14)),
           ),
         ],
       ],

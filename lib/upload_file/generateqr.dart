@@ -15,7 +15,8 @@ Future<Map<String, dynamic>?> showInputDialog({
   return showDialog<Map<String, dynamic>>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Input Tanda Tangan'),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      title: const Text('Ditujukan untuk', textAlign: TextAlign.center),
       content: Form(
         key: formKey,
         child: SingleChildScrollView(
@@ -23,26 +24,28 @@ Future<Map<String, dynamic>?> showInputDialog({
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(
-                controller: nipController,
+                controller: tujuanController,
                 decoration: const InputDecoration(
-                  labelText: 'NIP/NIM',
+                  labelText: 'Tujuan Surat',
+                  hintText: 'Masukkan tujuan...',
                   border: OutlineInputBorder(),
                 ),
                 validator: (val) =>
                     val == null || val.isEmpty ? 'Wajib diisi' : null,
               ),
-              const SizedBox(height: 10),
-              if (showTujuan)
-                TextFormField(
-                  controller: tujuanController,
-                  decoration: const InputDecoration(
-                    labelText: 'Alasan / Tujuan',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (val) =>
-                      val == null || val.isEmpty ? 'Wajib diisi' : null,
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: nipController,
+                decoration: const InputDecoration(
+                  labelText: 'Ditujukan untuk',
+                  hintText: 'Kepada...',
+                  border: OutlineInputBorder(),
+                  suffixIcon: Icon(Icons.arrow_drop_down),
                 ),
-              const SizedBox(height: 10),
+                validator: (val) =>
+                    val == null || val.isEmpty ? 'Wajib diisi' : null,
+              ),
+              const SizedBox(height: 12),
               DropdownButtonFormField<int>(
                 value: selectedPage,
                 decoration: const InputDecoration(
@@ -56,45 +59,58 @@ Future<Map<String, dynamic>?> showInputDialog({
                     child: Text('Halaman ${i + 1}'),
                   ),
                 ),
-                onChanged: (val) => selectedPage = val ?? 1,
+                onChanged: (val) {
+                  if (val != null) selectedPage = val;
+                },
               ),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Batal'),
-        ),
-        ElevatedButton(
-          onPressed: () async {
-            if (formKey.currentState!.validate()) {
-              final nip = nipController.text.trim();
-              final alasan = tujuanController.text.trim();
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff0A1E3F),
+              ),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Kembali'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xff0A1E3F),
+              ),
+              onPressed: () async {
+                if (formKey.currentState!.validate()) {
+                  final nip = nipController.text.trim();
+                  final alasan = tujuanController.text.trim();
 
-              try {
-                final result = await uploadSigner(
-                  documentId: documentId,
-                  nip: nip,
-                  alasan: showTujuan ? alasan : null,
-                );
+                  try {
+                    final result = await uploadSigner(
+                      documentId: documentId,
+                      nip: nip,
+                      alasan: showTujuan ? alasan : null,
+                    );
 
-                Navigator.pop(context, {
-                  'sign_token': result['sign_token'],
-                  'selected_page': selectedPage,
-                });
+                    Navigator.pop(context, {
+                      'sign_token': result['sign_token'],
+                      'selected_page': selectedPage,
+                    });
 
-                nipController.clear();
-                tujuanController.clear();
-              } catch (e) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(e.toString())));
-              }
-            }
-          },
-          child: const Text('Tambah & Generate QR'),
+                    nipController.clear();
+                    tujuanController.clear();
+                  } catch (e) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(e.toString())));
+                  }
+                }
+              },
+              child: const Text('OK'),
+            ),
+          ],
         ),
       ],
     ),
