@@ -71,7 +71,7 @@ class _FileverifikasiState extends State<Fileverifikasi> {
             child: SizedBox(
               width: 50,
               height: 50,
-              child: Image.asset('assets/images/pp.jpg', fit: BoxFit.cover),
+              child: Image.asset('assets/images/pp.png', fit: BoxFit.cover),
             ),
           ),
           const SizedBox(width: 12),

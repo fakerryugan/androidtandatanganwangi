@@ -57,7 +57,7 @@ class _LihatSemuaPageState extends State<LihatSemuaPage> {
                       width: 50,
                       height: 50,
                       child: Image.asset(
-                        'assets/images/pp.jpg',
+                        'assets/images/pp.png',
                         fit: BoxFit.cover,
                       ),
                     ),

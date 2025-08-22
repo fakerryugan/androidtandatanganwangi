@@ -67,7 +67,7 @@ class _HomePageState extends State<HomePage> {
                       width: 70,
                       height: 70,
                       child: Image.asset(
-                        'assets/images/pp.jpg',
+                        'assets/images/pp.png',
                         fit: BoxFit.cover,
                       ),
                     ),
