@@ -53,8 +53,8 @@ class Documentpage extends StatelessWidget {
             child: Column(
               children: [
                 _buildProfileCard("NIM", "362358302007"),
-                _buildProfileCard("Jabatan",
-                    "Mahasiswa Teknologi Rekayasa Perangkat"),
+                _buildProfileCard("Program Studi",
+                    "Teknologi Rekayasa Perangkat Lunak"),
                 _buildProfileCard("No. Handphone", "098765433234"),
                 _buildProfileCard("Alamat", "Rogojampi"),
               ],
@@ -68,7 +68,7 @@ class Documentpage extends StatelessWidget {
 
   Widget _buildProfileCard(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.only(bottom: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
