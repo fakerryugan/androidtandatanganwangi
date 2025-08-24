@@ -1,6 +1,6 @@
 // bottom_navbar.dart
 import 'package:flutter/material.dart';
-import 'package:android/bottom_navbar/document.dart';
+import 'package:android/bottom_navbar/documentpage.dart';
 import 'package:android/bottom_navbar/home.dart';
 import 'package:android/bottom_navbar/setting.dart';
 
