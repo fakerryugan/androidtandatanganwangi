@@ -1,4 +1,3 @@
-// bottom_navbar.dart
 import 'package:flutter/material.dart';
 import 'package:android/bottom_navbar/document.dart';
 import 'package:android/bottom_navbar/home.dart';
@@ -13,7 +12,7 @@ class MyBottomNavBar extends StatefulWidget {
 
 class _MyBottomNavBarState extends State<MyBottomNavBar> {
   int myCurrentIndex = 0;
-  final List<Widget> pages = const [HomePage(), Documentpage(), SettingPage()];
+  final List<Widget> pages = const [HomePage(), DocumentPage(), SettingPage()];
 
   @override
   Widget build(BuildContext context) {
