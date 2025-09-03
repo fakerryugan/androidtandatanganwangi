@@ -45,6 +45,7 @@ dependencies:
   open_filex: ^4.7.0
   flutter_pdfview: ^1.4.0+1
   flutter_bloc: ^9.1.1
+  equatable: ^2.0.5
 
 
 dev_dependencies:

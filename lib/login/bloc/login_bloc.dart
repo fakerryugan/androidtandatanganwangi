@@ -25,7 +25,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
           emit(LoginFailure("Token tidak ditemukan"));
         }
       } catch (e) {
-        emit(LoginFailure("Terjadi kesalahan: $e"));
+        emit(LoginFailure("Kredensial ini tidak cocok dengan catatan kami."));
       }
     });
 

@@ -25,32 +25,96 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
     super.dispose();
   }
 
+  void _showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.topCenter,
+          children: [
+            Container(
+              padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 20),
+              margin: const EdgeInsets.only(top: 40),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFE53935),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE53935),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 40),
+                    ),
+                    child: const Text('OK', style: TextStyle(color: Colors.white)),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 0,
+              child: CircleAvatar(
+                backgroundColor: const Color(0xFFE53935),
+                radius: 40,
+                child: const Icon(Icons.close, color: Colors.white, size: 40),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final horizontalPadding = size.width * 0.05;
+    final logoSize = size.width * 0.22;
+
     return BlocProvider(
       create: (_) => LoginBloc(LoginRepository()),
       child: Scaffold(
+        resizeToAvoidBottomInset: true,
         body: BlocConsumer<LoginBloc, LoginState>(
           listener: (context, state) async {
             if (state is LoginSuccess) {
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('token', state.user.token);
-
-              debugPrint("LOGIN BERHASIL. Pindah ke BottomNavBar...");
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (_) => const MyBottomNavBar()),
               );
             } else if (state is LoginFailure) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(state.error)));
+              _showErrorDialog('Login Gagal', state.error);
             }
           },
           builder: (context, state) {
             final isLoading = state is LoginLoading;
 
             return Container(
+              width: double.infinity,
+              height: double.infinity,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -64,16 +128,16 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
               child: SafeArea(
                 child: Center(
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 30),
+                    padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         SizedBox(
-                          width: 87,
-                          height: 86,
+                          width: logoSize,
+                          height: logoSize,
                           child: Image.asset('assets/images/logo.png'),
                         ),
-                        const SizedBox(height: 24),
+                        SizedBox(height: size.height * 0.03),
                         const Text(
                           'SELAMAT DATANG',
                           style: TextStyle(
@@ -82,7 +146,7 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        SizedBox(height: size.height * 0.01),
                         const Text(
                           'APLIKASI DOKUMEN & TANDA TANGAN DIGITAL',
                           style: TextStyle(color: Colors.white, fontSize: 12),
@@ -94,17 +158,14 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                           style: TextStyle(color: Colors.white, fontSize: 12),
                           textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 43),
+                        SizedBox(height: size.height * 0.05),
                         Container(
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(color: Colors.grey.shade300),
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 25,
-                            vertical: 20,
-                          ),
+                          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
                           child: Column(
                             children: [
                               TextField(
@@ -114,7 +175,7 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                                   border: OutlineInputBorder(),
                                 ),
                               ),
-                              const SizedBox(height: 30),
+                              SizedBox(height: size.height * 0.03),
                               TextField(
                                 controller: _passwordController,
                                 obscureText: true,
@@ -123,56 +184,43 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                                   border: OutlineInputBorder(),
                                 ),
                               ),
-                              const SizedBox(height: 30),
-                              ElevatedButton(
-                                onPressed: isLoading
-                                    ? null
-                                    : () {
-                                        final username = _usernameController
-                                            .text
-                                            .trim();
-                                        final password =
-                                            _passwordController.text;
+                              SizedBox(height: size.height * 0.03),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: isLoading
+                                      ? null
+                                      : () {
+                                          final username = _usernameController.text.trim();
+                                          final password = _passwordController.text;
 
-                                        if (username.isEmpty ||
-                                            password.isEmpty) {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text(
-                                                'Username dan Password harus diisi',
-                                              ),
-                                            ),
-                                          );
-                                          return;
-                                        }
+                                          if (username.isEmpty || password.isEmpty) {
+                                            _showErrorDialog(
+                                              'Salah',
+                                              'Username dan Password harus diisi tidak boleh kosong',
+                                            );
+                                            return;
+                                          }
 
-                                        context.read<LoginBloc>().add(
-                                          LoginRequested(username, password),
-                                        );
-                                      },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blueAccent,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 60,
-                                    vertical: 15,
+                                          context.read<LoginBloc>().add(
+                                              LoginRequested(username, password));
+                                        },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blueAccent,
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: size.height * 0.02,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: isLoading
-                                    ? const CircularProgressIndicator(
-                                        color: Colors.white,
-                                      )
-                                    : const Text(
-                                        'Masuk',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          color: Colors.white,
+                                  child: isLoading
+                                      ? const CircularProgressIndicator(color: Colors.white)
+                                      : const Text(
+                                          'Masuk',
+                                          style: TextStyle(fontSize: 18, color: Colors.white),
                                         ),
-                                      ),
+                                ),
                               ),
                             ],
                           ),

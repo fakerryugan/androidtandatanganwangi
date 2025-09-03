@@ -22,7 +22,7 @@ class LoginRepository {
 
       return User.fromJson(userData, token); // ✅ pakai token
     } else {
-      throw Exception("Login gagal: ${response.body}");
+      throw Exception("Kredensial ini tidak cocok dengan catatan kami.");
     }
   }
 }

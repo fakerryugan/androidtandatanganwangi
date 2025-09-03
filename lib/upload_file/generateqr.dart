@@ -10,7 +10,6 @@ Future<Map<String, dynamic>?> showInputDialog({
   required int totalPages,
   required int documentId,
 }) async {
-  int selectedPage = 1;
 
   return showDialog<Map<String, dynamic>>(
     context: context,
@@ -45,23 +44,8 @@ Future<Map<String, dynamic>?> showInputDialog({
                     val == null || val.isEmpty ? 'Wajib diisi' : null,
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                value: selectedPage,
-                decoration: const InputDecoration(
-                  labelText: 'Halaman',
-                  border: OutlineInputBorder(),
-                ),
-                items: List.generate(
-                  totalPages,
-                  (i) => DropdownMenuItem(
-                    value: i + 1,
-                    child: Text('Halaman ${i + 1}'),
-                  ),
-                ),
-                onChanged: (val) {
-                  if (val != null) selectedPage = val;
-                },
-              ),
+          
+  
             ],
           ),
         ),
@@ -95,7 +79,7 @@ Future<Map<String, dynamic>?> showInputDialog({
 
                     Navigator.pop(context, {
                       'sign_token': result['sign_token'],
-                      'selected_page': selectedPage,
+  
                     });
 
                     nipController.clear();
