@@ -8,10 +8,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
-import 'package:android/api/token.dart'; // Assume this file exists
-import 'package:android/bottom_navbar/bottom_navbar.dart'; // Assume this file exists
+import 'package:android/api/token.dart'; 
 import 'dart:convert';
-import 'package:flutter/material.dart'; // For Offset
+import 'package:flutter/material.dart'; 
 
 import 'pdfviewer_event.dart';
 import 'pdfviewer_state.dart';
@@ -33,7 +32,7 @@ class PdfViewerBloc extends Bloc<PdfViewerEvent, PdfViewerState> {
     if (event.qrData != null) {
       qrCodes.add({
         ...event.qrData!,
-        'position': const Offset(0, 0), // Initial position, will be set by UI
+        'position': const Offset(0, 0),
         'locked': true,
       });
     }
@@ -50,7 +49,7 @@ class PdfViewerBloc extends Bloc<PdfViewerEvent, PdfViewerState> {
     final updatedQrCodes = List<Map<String, dynamic>>.from(state.qrCodes);
     updatedQrCodes.add({
       ...event.qrData,
-      'position': const Offset(0, 0), // Initial position, will be set by UI
+      'position': const Offset(0, 0),
       'locked': false,
     });
     emit(state.copyWith(
@@ -111,23 +110,16 @@ class PdfViewerBloc extends Bloc<PdfViewerEvent, PdfViewerState> {
         final int pageIndex = (qr['selected_page'] ?? 1) - 1;
         if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
 
-        final PdfPage pdfPage = document.pages[pageIndex];
-
-        // Placeholder for position logic, should be handled by the UI
-        final Offset position = qr['position'] ?? Offset.zero;
-
-        // This requires a reference to the PDF viewer's size and zoom, which
-        // is tricky in BLoC. You might need to pass this info as part of the event.
-        // For a true BLoC approach, the UI would handle this logic and pass
-        // the final PDF coordinates to the BLoC.
-        // For simplicity, let's assume a direct mapping for now.
+        final pdfPage = document.pages[pageIndex];
+        final pdfPoint = qr['position'] as Offset;
+        
         pdfPage.graphics.drawImage(
           pdfImage,
           Rect.fromLTWH(
-            position.dx,
-            position.dy,
-            qrPdfSize,
-            qrPdfSize,
+            pdfPoint.dx,
+            pdfPoint.dy,
+            PdfViewerBloc.qrPdfSize,
+            PdfViewerBloc.qrPdfSize,
           ),
         );
       }

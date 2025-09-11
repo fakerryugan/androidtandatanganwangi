@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'package:android/api/token.dart';
-import 'package:android/bottom_navbar/bottom_navbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -9,7 +7,7 @@ import 'package:android/upload_file/generateqr.dart';
 import 'package:android/upload_file/pdfviewer_bloc.dart';
 import 'package:android/upload_file/pdfviewer_event.dart';
 import 'package:android/upload_file/pdfviewer_state.dart';
-import 'package:android/utils/offset_extensions.dart';
+import 'package:android/api/token.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey();
 
@@ -33,7 +31,7 @@ class PdfViewerPage extends StatefulWidget {
 
 class _PdfViewerPageState extends State<PdfViewerPage> {
   late PdfViewerController _pdfViewerController;
-  final GlobalKey<SfPdfViewerState> _pdfViewerKey = GlobalKey();
+  final GlobalKey _pdfWidgetKey = GlobalKey();
 
   @override
   void initState() {
@@ -45,18 +43,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   void dispose() {
     _pdfViewerController.dispose();
     super.dispose();
-  }
-
-  // Metode untuk mengkonversi koordinat layar ke koordinat PDF
-  Offset _getPDFCoordinates(Offset localPosition) {
-    final zoomLevel = _pdfViewerController.zoomLevel;
-    final scrollOffset = _pdfViewerController.scrollOffset;
-    
-    // Hitung posisi relatif terhadap halaman PDF.
-    final x = (localPosition.dx + scrollOffset.dx) / zoomLevel;
-    final y = (localPosition.dy + scrollOffset.dy) / zoomLevel;
-
-    return Offset(x, y);
   }
 
   @override
@@ -71,191 +57,33 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       child: BlocListener<PdfViewerBloc, PdfViewerState>(
         listener: (context, state) {
           if (state.status == PdfViewerStatus.processing) {
-            scaffoldMessengerKey.currentState?.showSnackBar(
-              const SnackBar(content: Text('Menyimpan QR ke PDF...')),
-            );
+            _showSnackBar(context, 'Menyimpan QR ke PDF...');
           } else if (state.status == PdfViewerStatus.success) {
-            scaffoldMessengerKey.currentState?.showSnackBar(
-              const SnackBar(content: Text('Tanda tangan berhasil disimpan!')),
-            );
+            _showSnackBar(context, 'Tanda tangan berhasil disimpan!');
           } else if (state.status == PdfViewerStatus.sending) {
-            scaffoldMessengerKey.currentState?.showSnackBar(
-              const SnackBar(content: Text('Dokumen berhasil dikirim!')),
-            );
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (_) => const MyBottomNavBar()),
-              (route) => false,
-            );
+            _showSnackBar(context, 'Dokumen berhasil dikirim!');
+            Navigator.of(context).pop();
           } else if (state.status == PdfViewerStatus.error) {
-            scaffoldMessengerKey.currentState?.showSnackBar(
-              SnackBar(content: Text('Error: ${state.error}')),
-            );
+            _showSnackBar(context, 'Error: ${state.error}');
           }
         },
         child: Scaffold(
-          appBar: _buildAppBar(context),
+          appBar: _buildAppBar(),
           body: Stack(
             children: [
-              // BLOC BUILDER HANYA UNTUK PDF VIEWER
-              BlocBuilder<PdfViewerBloc, PdfViewerState>(
-                builder: (context, state) {
-                  if (state.filePath == null) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  return SfPdfViewer.file(
-                    File(state.filePath!),
-                    key: _pdfViewerKey,
-                    controller: _pdfViewerController,
-                  );
-                },
-              ),
-              
-              // GestureDetector untuk mendeteksi posisi QR
-              BlocBuilder<PdfViewerBloc, PdfViewerState>(
-                buildWhen: (previous, current) => previous.qrCodes != current.qrCodes,
-                builder: (context, state) {
-                  final unlockedQrsExist = state.qrCodes.any((q) => !q['locked']);
-
-                  return GestureDetector(
-                    onTapUp: (details) {
-                      if (unlockedQrsExist) {
-                        final bloc = context.read<PdfViewerBloc>();
-                        final pdfCoordinates = _getPDFCoordinates(details.localPosition);
-                        bloc.add(UpdateQrPosition(state.qrCodes.indexWhere((q) => !q['locked']), pdfCoordinates));
-                      }
-                    },
-                    child: Container(
-                      // Container transparan agar gestur bekerja di atas PDF
-                      color: Colors.transparent,
-                      width: double.infinity,
-                      height: double.infinity,
-                    ),
-                  );
-                },
-              ),
-
-              // BLOC BUILDER HANYA UNTUK OVERLAY QR CODE
-              BlocBuilder<PdfViewerBloc, PdfViewerState>(
-                buildWhen: (previous, current) => previous.qrCodes != current.qrCodes,
-                builder: (context, state) {
-                  final unlockedQrs = state.qrCodes.where((q) => q['locked'] != true).toList();
-                  if (unlockedQrs.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-
-                  final zoomLevel = _pdfViewerController.zoomLevel;
-                  final scrollOffset = _pdfViewerController.scrollOffset;
-
-                  return Stack(
-                    children: unlockedQrs.map((qr) {
-                      final index = state.qrCodes.indexOf(qr);
-                      final screenX = (qr['position']?.dx ?? 0) * zoomLevel - scrollOffset.dx;
-                      final screenY = (qr['position']?.dy ?? 0) * zoomLevel - scrollOffset.dy;
-                      
-                      return Positioned(
-                        left: screenX,
-                        top: screenY,
-                        child: GestureDetector(
-                          onPanUpdate: (details) {
-                            final bloc = context.read<PdfViewerBloc>();
-                            final deltaPdfX = details.delta.dx / zoomLevel;
-                            final deltaPdfY = details.delta.dy / zoomLevel;
-
-                            final currentPdfX = qr['position']?.dx ?? 0;
-                            final currentPdfY = qr['position']?.dy ?? 0;
-
-                            final newPdfPosition = Offset(
-                              currentPdfX + deltaPdfX,
-                              currentPdfY + deltaPdfY,
-                            );
-                            bloc.add(UpdateQrPosition(index, newPdfPosition));
-                          },
-                          child: Container(
-                            width: PdfViewerPage.qrDisplaySize,
-                            height: PdfViewerPage.qrDisplaySize,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.red, width: 2),
-                            ),
-                            child: QrImageView(
-                              data: "${baseUrl}/view/${qr['sign_token']}",
-                              size: PdfViewerPage.qrDisplaySize,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-              ),
-              
-              // Widget lainnya
-              BlocBuilder<PdfViewerBloc, PdfViewerState>(
-                builder: (context, state) {
-                  return _buildBottomNavigation(context, state);
-                },
-              ),
-              BlocBuilder<PdfViewerBloc, PdfViewerState>(
-                builder: (context, state) {
-                  if (state.status == PdfViewerStatus.processing || state.status == PdfViewerStatus.sending) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
+              _buildPdfViewer(),
+              _buildQrOverlay(),
+              _buildLoadingIndicator(),
+              _buildBottomNavigation(context),
             ],
           ),
-          floatingActionButton: BlocBuilder<PdfViewerBloc, PdfViewerState>(
-            builder: (context, state) {
-              final unlockedQrsExist = state.qrCodes.any((q) => !q['locked']);
-              return Visibility(
-                visible: state.status != PdfViewerStatus.processing && state.status != PdfViewerStatus.sending && state.filePath != null,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 70.0),
-                  child: FloatingActionButton.extended(
-                    backgroundColor: Colors.white,
-                    onPressed: () async {
-                      if (unlockedQrsExist) {
-                        context.read<PdfViewerBloc>().add(SaveAllQrCodesToPdf());
-                      } else {
-                        final result = await showInputDialog(
-                          context: context,
-                          formKey: GlobalKey<FormState>(),
-                          nipController: TextEditingController(),
-                          tujuanController: TextEditingController(),
-                          showTujuan: true,
-                          totalPages: 10,
-                          documentId: widget.documentId,
-                        );
-
-                        if (result != null && result['sign_token'] != null) {
-                          context.read<PdfViewerBloc>().add(AddQrCode(result));
-                        }
-                      }
-                    },
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: const BorderSide(color: Colors.black, width: 2),
-                    ),
-                    label: Text(
-                      unlockedQrsExist ? 'Simpan & Kunci' : '+ Tanda Tangan',
-                      style: const TextStyle(color: Colors.black),
-                    ),
-                    icon: Icon(
-                      unlockedQrsExist ? Icons.save : Icons.edit,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
+          floatingActionButton: _buildFloatingActionButton(),
         ),
       ),
     );
   }
 
-  AppBar _buildAppBar(BuildContext context) {
+  AppBar _buildAppBar() {
     return AppBar(
       title: const Text('Edit', style: TextStyle(color: Colors.white)),
       backgroundColor: const Color(0xFF172B4C),
@@ -264,7 +92,94 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     );
   }
 
-  Widget _buildBottomNavigation(BuildContext context, PdfViewerState state) {
+  Widget _buildPdfViewer() {
+    return BlocBuilder<PdfViewerBloc, PdfViewerState>(
+      builder: (context, state) {
+        if (state.filePath == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return SfPdfViewer.file(
+          File(state.filePath!),
+          key: _pdfWidgetKey,
+          controller: _pdfViewerController,
+        );
+      },
+    );
+  }
+
+  Widget _buildQrOverlay() {
+    return BlocBuilder<PdfViewerBloc, PdfViewerState>(
+      buildWhen: (previous, current) => previous.qrCodes != current.qrCodes,
+      builder: (context, state) {
+        final unlockedQrs = state.qrCodes.where((q) => q['locked'] != true).toList();
+        if (unlockedQrs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        final pdfWidgetRenderBox = _pdfWidgetKey.currentContext?.findRenderObject() as RenderBox?;
+        if (pdfWidgetRenderBox == null || state.pageWidth == null || state.pageHeight == null) {
+          return const SizedBox.shrink();
+        }
+        
+        // Dapatkan properti dari controller
+        final zoomLevel = _pdfViewerController.zoomLevel;
+        final scrollOffset = _pdfViewerController.scrollOffset;
+        final viewPortSize = pdfWidgetRenderBox.size;
+
+        return Stack(
+          children: unlockedQrs.map((qr) {
+            final index = state.qrCodes.indexOf(qr);
+            final currentRelativePosition = qr['position'] as Offset;
+
+            // Konversi posisi relatif dari PDF ke posisi di layar
+            // Ini adalah rumus yang benar
+            final screenX = (currentRelativePosition.dx * state.pageWidth! * zoomLevel) - scrollOffset.dx;
+            final screenY = (currentRelativePosition.dy * state.pageHeight! * zoomLevel) - scrollOffset.dy;
+
+            return Positioned(
+              left: screenX,
+              top: screenY,
+              child: Draggable(
+                feedback: SizedBox(
+                  width: PdfViewerPage.qrDisplaySize,
+                  height: PdfViewerPage.qrDisplaySize,
+                  child: QrImageView(data: "${baseUrl}/view/${qr['sign_token']}"),
+                ),
+                child: SizedBox(
+                  width: PdfViewerPage.qrDisplaySize,
+                  height: PdfViewerPage.qrDisplaySize,
+                  child: QrImageView(data: "${baseUrl}/view/${qr['sign_token']}"),
+                ),
+                onDragEnd: (details) {
+                  final dropPosition = details.offset;
+                  final localOffset = pdfWidgetRenderBox.globalToLocal(dropPosition);
+
+                  // Konversi posisi lokal ke posisi relatif terhadap halaman PDF
+                  final relativeX = (localOffset.dx + scrollOffset.dx) / (state.pageWidth! * zoomLevel);
+                  final relativeY = (localOffset.dy + scrollOffset.dy) / (state.pageHeight! * zoomLevel);
+                  
+                  context.read<PdfViewerBloc>().add(UpdateQrPosition(index, Offset(relativeX, relativeY)));
+                },
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return BlocBuilder<PdfViewerBloc, PdfViewerState>(
+      builder: (context, state) {
+        if (state.status == PdfViewerStatus.processing || state.status == PdfViewerStatus.sending) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+
+  Widget _buildBottomNavigation(BuildContext context) {
     return Align(
       alignment: Alignment.bottomCenter,
       child: ClipRRect(
@@ -279,9 +194,8 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildBackButton(context, state),
-                if (state.qrCodes.isNotEmpty) // Tampilkan tombol Kirim jika ada setidaknya satu QR
-                  _buildSendButton(context, state),
+                _buildBackButton(context),
+                _buildSendButton(context),
               ],
             ),
           ),
@@ -290,7 +204,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     );
   }
 
-  Widget _buildBackButton(BuildContext context, PdfViewerState state) {
+  Widget _buildBackButton(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -303,28 +217,93 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     );
   }
 
-  Widget _buildSendButton(BuildContext context, PdfViewerState state) {
-    return Container(
-      decoration: BoxDecoration(
-        color: state.qrCodes.any((q) => q['locked']) ? Colors.green : Colors.grey,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: state.status == PdfViewerStatus.sending
-          ? const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: CircularProgressIndicator(color: Colors.white),
-            )
-          : IconButton(
-              icon: const Icon(Icons.send, color: Colors.white),
-              onPressed: state.qrCodes.any((q) => q['locked']) ? () {
-                if (state.filePath != null && state.documentId != null) {
-                  context.read<PdfViewerBloc>().add(SendDocument(state.filePath!, state.documentId!));
-                }
-              } : null,
-            ),
+  Widget _buildSendButton(BuildContext context) {
+    return BlocBuilder<PdfViewerBloc, PdfViewerState>(
+      builder: (context, state) {
+        final canSend = state.qrCodes.any((q) => q['locked']);
+        if (!state.qrCodes.isNotEmpty) return const SizedBox.shrink();
+
+        return Container(
+          decoration: BoxDecoration(
+            color: canSend ? Colors.green : Colors.grey,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: state.status == PdfViewerStatus.sending
+              ? const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator(color: Colors.white),
+                )
+              : IconButton(
+                  icon: const Icon(Icons.send, color: Colors.white),
+                  onPressed: canSend ? () {
+                    if (state.filePath != null && state.documentId != null) {
+                      context.read<PdfViewerBloc>().add(SendDocument(state.filePath!, state.documentId!));
+                    }
+                  } : null,
+                ),
+        );
+      },
     );
   }
 
+  Widget _buildFloatingActionButton() {
+    return BlocBuilder<PdfViewerBloc, PdfViewerState>(
+      builder: (context, state) {
+        final unlockedQrsExist = state.qrCodes.any((q) => !q['locked']);
+        return Visibility(
+          visible: state.status != PdfViewerStatus.processing && state.status != PdfViewerStatus.sending && state.filePath != null,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 70.0),
+            child: FloatingActionButton.extended(
+              backgroundColor: Colors.white,
+              onPressed: () async {
+                if (unlockedQrsExist) {
+                  context.read<PdfViewerBloc>().add(SaveAllQrCodesToPdf());
+                } else {
+                  final result = await showInputDialog(
+                    context: context,
+                    formKey: GlobalKey<FormState>(),
+                    nipController: TextEditingController(),
+                    tujuanController: TextEditingController(),
+                    showTujuan: true,
+                    totalPages: _pdfViewerController.pageCount,
+                    documentId: widget.documentId,
+                  );
+
+                  if (result != null && result['sign_token'] != null) {
+                    final currentPage = _pdfViewerController.pageNumber;
+                    context.read<PdfViewerBloc>().add(AddQrCode({
+                      ...result,
+                      'selected_page': currentPage,
+                    }));
+                  }
+                }
+              },
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: Colors.black, width: 2),
+              ),
+              label: Text(
+                unlockedQrsExist ? 'Simpan & Kunci' : '+ Tanda Tangan',
+                style: const TextStyle(color: Colors.black),
+              ),
+              icon: Icon(
+                unlockedQrsExist ? Icons.save : Icons.edit,
+                color: Colors.black,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+  
   Future<void> _showCancelConfirmationDialog(BuildContext context) async {
     await showDialog(
       context: context,
