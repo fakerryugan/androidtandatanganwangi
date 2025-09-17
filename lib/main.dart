@@ -113,7 +113,7 @@ class MyApp extends StatelessWidget {
         // Menghubungkan GlobalKey ke MaterialApp.
         navigatorKey: navigatorKey,
         home: FutureBuilder<bool>(
-          future: checkLogin-Status(),
+          future:checkLoginStatus(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Scaffold(
