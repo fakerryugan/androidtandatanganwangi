@@ -138,7 +138,8 @@ Future<Map<String, dynamic>> cancelDocument(int documentId) async {
 Future<Map<String, dynamic>> uploadSigner({
   required int documentId,
   required String nip,
-  String? alasan,
+  required String tujuan,
+  String? alasan
 }) async {
   final token = await getToken();
   if (token == null) throw Exception('Token tidak ditemukan');

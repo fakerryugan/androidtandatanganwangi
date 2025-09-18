@@ -23,7 +23,7 @@ Future<Map<String, dynamic>?> showInputDialog({
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Tujuan Surat'),
+              const Text('Tujuan Surat'),
               TextFormField(
                 controller: tujuanController,
                 decoration: const InputDecoration(
@@ -31,10 +31,10 @@ Future<Map<String, dynamic>?> showInputDialog({
                   border: OutlineInputBorder(),
                 ),
                 validator: (val) =>
-                    val == null || val.isEmpty ? 'Wajib diisi' : null,
+                val == null || val.isEmpty ? 'Wajib diisi' : null,
               ),
               const SizedBox(height: 12),
-              Text('Ditujukan untuk'),
+              const Text('Ditujukan untuk'),
               TextFormField(
                 controller: nipController,
                 decoration: const InputDecoration(
@@ -42,7 +42,7 @@ Future<Map<String, dynamic>?> showInputDialog({
                   border: OutlineInputBorder(),
                 ),
                 validator: (val) =>
-                    val == null || val.isEmpty ? 'Wajib diisi' : null,
+                val == null || val.isEmpty ? 'Wajib diisi' : null,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int>(
@@ -53,7 +53,7 @@ Future<Map<String, dynamic>?> showInputDialog({
                 ),
                 items: List.generate(
                   totalPages,
-                  (i) => DropdownMenuItem(
+                      (i) => DropdownMenuItem(
                     value: i + 1,
                     child: Text('Halaman ${i + 1}'),
                   ),
@@ -82,32 +82,41 @@ Future<Map<String, dynamic>?> showInputDialog({
                 backgroundColor: const Color(0xff0A1E3F),
               ),
               onPressed: () async {
-                if (formKey.currentState!.validate()) {
+                if (formKey.currentState?.validate() ?? false) {
                   final nip = nipController.text.trim();
-                  final alasan = tujuanController.text.trim();
+                  final tujuan = tujuanController.text.trim();
 
                   try {
                     final result = await uploadSigner(
                       documentId: documentId,
                       nip: nip,
-                      alasan: showTujuan ? alasan : null,
+                      tujuan: tujuan,
+                      alasan: showTujuan ? tujuan : null, // ✅ jelas: kalau true kirim, kalau false null
                     );
 
-                    Navigator.pop(context, {
-                      'sign_token': result['sign_token'],
-                      'selected_page': selectedPage,
-                    });
+                    if (result['success'] == true) {
+                      nipController.clear();
+                      tujuanController.clear();
 
-                    nipController.clear();
-                    tujuanController.clear();
+                      Navigator.pop(context, {
+                        'sign_token': result['sign_token'],
+                        'selected_page': selectedPage,
+                      });
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(result['message'] ?? 'Gagal membuat QR'),
+                        ),
+                      );
+                    }
                   } catch (e) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: ${e.toString()}')),
+                    );
                   }
                 }
               },
-              child: const Text('OK'),
+              child: const Text('Lanjutkan'),
             ),
           ],
         ),
