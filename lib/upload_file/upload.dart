@@ -1,9 +1,9 @@
 import 'dart:io';
-import 'package:android/api/token.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../upload_file/menampilkanpdf.dart';
+import '../api/token.dart';
+import 'menampilkanpdf.dart';
 
 class PdfPickerHelper {
   static Future<void> pickAndOpenPdf(BuildContext context) async {
@@ -27,7 +27,7 @@ class PdfPickerHelper {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => PdfViewerPage(
+          builder: (_) => PdfViewerPage(
             filePath: file.path,
             documentId: data['document_id'],
           ),
@@ -39,8 +39,7 @@ class PdfPickerHelper {
   }
 
   static void _showMessage(BuildContext context, String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 }

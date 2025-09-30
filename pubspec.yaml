@@ -33,7 +33,7 @@ dependencies:
   http: ^1.2.0
   device_info_plus: ^11.4.0
   cupertino_icons: ^1.0.8
-  syncfusion_flutter_pdfviewer: ^29.2.10
+  syncfusion_flutter_pdfviewer: ^29.2.11
   syncfusion_pdfviewer_platform_interface: ^29.2.10
   file_picker: ^10.1.9
   path_provider: ^2.1.5
