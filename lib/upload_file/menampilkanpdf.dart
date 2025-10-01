@@ -107,94 +107,173 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final originalFileBytes = await File(widget.filePath).readAsBytes();
       final PdfDocument document = PdfDocument(inputBytes: originalFileBytes);
 
-      final unlockedQrs = qrCodes.where((q) => q['locked'] != true).toList();
+      final qrCodesToSave = qrCodes.where((q) => q['locked'] != true).toList();
 
-      if (unlockedQrs.isEmpty) {
+      if (qrCodesToSave.isEmpty) {
         scaffold?.showSnackBar(
           const SnackBar(content: Text('Tidak ada QR yang perlu disimpan')),
         );
         return;
       }
 
-      for (final qr in unlockedQrs) {
-        // ✅ Ambil ukuran QR sesuai drag-resize (fallback ke _initialQrSize)
-        final double qrSize = (qr['size'] ?? _initialQrSize).toDouble();
+      // for (final qr in unlockedQrs) {
+      //   // ✅ Ambil ukuran QR sesuai drag-resize (fallback ke _initialQrSize)
+      //   final double qrSize = (qr['size'] ?? _initialQrSize).toDouble();
+      //
+      //   final qrPainter = QrPainter.withQr(
+      //     qr: QrValidator.validate(
+      //       data: "$baseUrl/view/${qr['sign_token']}",
+      //       version: QrVersions.auto,
+      //       errorCorrectionLevel: QrErrorCorrectLevel.H,
+      //     ).qrCode!,
+      //     gapless: true,
+      //     color: const Color(0xFF000000),
+      //     emptyColor: const Color(0xFFFFFFFF), // background putih biar kontras
+      //   );
+      //
+      //   // ✅ Render QR dengan resolusi tinggi (×4 dari ukuran asli)
+      //   final ui.Image qrImage = await qrPainter.toImage((qrSize * 4));
+      //   final ByteData? byteData =
+      //   await qrImage.toByteData(format: ui.ImageByteFormat.png);
+      //   if (byteData == null) continue;
+      //
+      //   final Uint8List bytes = byteData.buffer.asUint8List();
+      //   final PdfBitmap pdfImage = PdfBitmap(bytes);
+      //
+      //   final int pageIndex = (qr['selected_page'] ?? 1) - 1;
+      //   if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+      //
+      //   final PdfPage pdfPage = document.pages[pageIndex];
+      //   final Offset position = qr['position'] ?? Offset.zero;
+      //
+      //   // ✅ Ambil ukuran halaman PDF & ukuran viewer
+      //   final Size pageSize = pdfPage.size;
+      //   final Size viewSize = _pdfViewerKey.currentContext?.size ?? Size.zero;
+      //   final double zoomLevel = pdfViewerController.zoomLevel;
+      //
+      //   // ✅ Hitung scaling (anggap proporsional, pakai scaleX saja)
+      //   final double scaleX = pageSize.width / (viewSize.width * zoomLevel);
+      //   final double scaleY = pageSize.height / (viewSize.height * zoomLevel);
+      //
+      //   // ✅ Mapping ke koordinat PDF
+      //   // var pdfX = position.dx * scaleX;
+      //   // var qrSizeInPdf = qrSize * scaleX;
+      //   // var pdfY = pageSize.height - (position.dy * scaleY) - qrSizeInPdf;
 
-        final qrPainter = QrPainter.withQr(
-          qr: QrValidator.validate(
-            data: "$baseUrl/view/${qr['sign_token']}",
+
+      for (final qr in qrCodesToSave) {
+        if (qr['locked'] == false) {
+          final int pageIndex = (qr['selected_page'] as int) - 1;
+          final PdfPage pdfPage = document.pages[pageIndex];
+          final Offset position = qr['position'] as Offset;
+          final double qrSize = qr['size'] as double;
+          final String signToken = qr['sign_token'] as String;
+
+          final imageBytes = await QrPainter(
+            data: signToken,
             version: QrVersions.auto,
-            errorCorrectionLevel: QrErrorCorrectLevel.H,
-          ).qrCode!,
-          gapless: true,
-          color: const Color(0xFF000000),
-          emptyColor: const Color(0xFFFFFFFF), // background putih biar kontras
-        );
+            gapless: true,
+          ).toImageData(1024); // Ukuran gambar resolusi tinggi
 
-        // ✅ Render QR dengan resolusi tinggi (×4 dari ukuran asli)
-        final ui.Image qrImage = await qrPainter.toImage((qrSize * 4));
-        final ByteData? byteData =
-        await qrImage.toByteData(format: ui.ImageByteFormat.png);
-        if (byteData == null) continue;
 
-        final Uint8List bytes = byteData.buffer.asUint8List();
-        final PdfBitmap pdfImage = PdfBitmap(bytes);
+          if (imageBytes != null) {
+            final pdfImage = PdfBitmap(imageBytes.buffer.asUint8List());
+            final Size pageSize = pdfPage.size;
+            final Size viewSize = _pdfViewerKey.currentContext?.size ?? Size.zero;
 
-        final int pageIndex = (qr['selected_page'] ?? 1) - 1;
-        if (pageIndex < 0 || pageIndex >= document.pages.count) continue;
+            // ========================================================
+            // ✅ PERBAIKAN FINAL (REVISI): Kembali ke Logika Intuitif
+            // ========================================================
 
-        final PdfPage pdfPage = document.pages[pageIndex];
-        final Offset position = qr['position'] ?? Offset.zero;
 
-        // ✅ Ambil ukuran halaman PDF & ukuran viewer
-        final Size pageSize = pdfPage.size;
-        final Size viewSize = _pdfViewerKey.currentContext?.size ?? Size.zero;
-        final double zoomLevel = pdfViewerController.zoomLevel;
+            final Offset scrollOffset = _pdfViewerController.scrollOffset;
 
-        // ✅ Hitung scaling (anggap proporsional, pakai scaleX saja)
-        final double scaleX = pageSize.width / (viewSize.width * zoomLevel);
-        final double scaleY = pageSize.height / (viewSize.height * zoomLevel);
+// 2. Hitung padding internal (letterboxing/pillarboxing) yang diterapkan oleh SfPdfViewer.
+            final double viewAspectRatio = viewSize.width / viewSize.height;
+            final double pageAspectRatio = pageSize.width / pageSize.height;
+            double internalPaddingX = 0;
+            double internalPaddingY = 0;
+            double effectiveViewWidth;
 
-        // ✅ Mapping ke koordinat PDF
-        var pdfX = position.dx * scaleX;
-        var qrSizeInPdf = qrSize * scaleX;
-        var pdfY = pageSize.height - (position.dy * scaleY) - qrSizeInPdf;
+            if (pageAspectRatio > viewAspectRatio) {
+              // Pillarbox (padding atas/bawah)
+              effectiveViewWidth = viewSize.width;
+              final double effectiveViewHeight = effectiveViewWidth / pageAspectRatio;
+              internalPaddingY = (viewSize.height - effectiveViewHeight) / 2;
+            } else {
+              // Letterbox (padding kiri/kanan)
+              final double effectiveViewHeight = viewSize.height;
+              effectiveViewWidth = effectiveViewHeight * pageAspectRatio;
+              internalPaddingX = (viewSize.width - effectiveViewWidth) / 2;
+            }
 
-        // Clamp biar tidak keluar halaman
-        pdfX = pdfX.clamp(0, pageSize.width - qrSizeInPdf);
-        pdfY = pdfY.clamp(0, pageSize.height - qrSizeInPdf);
+// 3. Hitung skala yang benar berdasarkan lebar efektif PDF yang terlihat.
+            final double scale = pageSize.width / effectiveViewWidth;
 
-        // Debug log
-        debugPrint("=== QR Mapping ===");
-        debugPrint("Screen Pos: $position, Size: $qrSize");
-        debugPrint("ScaleX: $scaleX, ScaleY: $scaleY");
-        debugPrint("PDF Pos: x=$pdfX, y=$pdfY, size=$qrSizeInPdf");
-        debugPrint("PDF Page Size: $pageSize");
-        debugPrint("==================");
+// 4. Hitung posisi PUSAT QR di layar.
+            final Offset qrCenterOnScreen = Offset(
+              position.dx + (qrSize / 2),
+              position.dy + (qrSize / 2),
+            );
 
-        // ✅ Gambar QR ke PDF
-        pdfPage.graphics.drawImage(
-          pdfImage,
-          Rect.fromLTWH(pdfX, pdfY, qrSizeInPdf, qrSizeInPdf),
-        );
+// 5. Hitung posisi mentah (raw position) dari PUSAT QR,
+//    DENGAN MENGURANGI PADDING INTERNAL untuk mendapatkan posisi yang benar
+//    relatif terhadap PDF yang terlihat.
+            final double rawCenterX = (qrCenterOnScreen.dx - internalPaddingX) + scrollOffset.dx;
+            final double rawCenterY = (qrCenterOnScreen.dy - internalPaddingY) + scrollOffset.dy;
+
+// 6. Konversi posisi PUSAT dan ukuran ke unit PDF menggunakan skala yang akurat.
+            double pdfCenterX = rawCenterX * scale;
+            double qrSizeInPdf = qrSize * scale;
+
+// 7. Konversi sumbu Y untuk PUSAT QR.
+            double pdfCenterY = pageSize.height - (rawCenterY * scale);
+
+// 8. Hitung posisi pojok kiri-atas (x, y) dari pusat QR di koordinat PDF.
+            double pdfX = pdfCenterX - (qrSizeInPdf / 2);
+            double pdfY = pdfCenterY - (qrSizeInPdf / 2);
+
+// 9. Clamp (batasi) nilai agar tidak keluar dari halaman.
+            pdfX = pdfX.clamp(0, pageSize.width - qrSizeInPdf);
+            pdfY = pdfY.clamp(0, pageSize.height - qrSizeInPdf);
+
+// Debug log untuk verifikasi
+            debugPrint("=== QR Mapping (PADDING CORRECTED) ===");
+            debugPrint("Internal Padding: x=${internalPaddingX.toStringAsFixed(2)}, y=${internalPaddingY.toStringAsFixed(2)}");
+            debugPrint("Scale (Corrected): ${scale.toStringAsFixed(4)}");
+            debugPrint("Final PDF Top-Left: x=${pdfX.toStringAsFixed(2)}, y=${pdfY.toStringAsFixed(2)}, size=${qrSizeInPdf.toStringAsFixed(2)}");
+            debugPrint("======================================");
+
+// Gambar QR ke PDF menggunakan koordinat pojok kiri-atas yang sudah benar.
+            pdfPage.graphics.drawImage(
+              pdfImage,
+              Rect.fromLTWH(pdfX, pdfY, qrSizeInPdf, qrSizeInPdf),
+            );
+            // ========================================================
+            // ✅ AKHIR DARI BLOK PERBAIKAN
+            // ========================================================
+          }
+        }
       }
 
-      final tempPath =
-          '${Directory.systemTemp.path}/temp_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      await File(tempPath).writeAsBytes(await document.save());
-      document.dispose();
+        final tempPath =
+            '${Directory.systemTemp.path}/temp_${DateTime
+            .now()
+            .millisecondsSinceEpoch}.pdf';
+        await File(tempPath).writeAsBytes(await document.save());
+        document.dispose();
 
-      await File(_currentPdfPath).delete();
-      await File(tempPath).rename(_currentPdfPath);
+        await File(_currentPdfPath).delete();
+        await File(tempPath).rename(_currentPdfPath);
 
-      setState(() {
-        qrCodes = qrCodes.map((qr) => {...qr, 'locked': true}).toList();
-      });
+        setState(() {
+          qrCodes = qrCodes.map((qr) => {...qr, 'locked': true}).toList();
+        });
 
-      scaffold?.showSnackBar(
-        const SnackBar(content: Text('QR berhasil disimpan!')),
-      );
-    } catch (e) {
+        scaffold?.showSnackBar(
+          const SnackBar(content: Text('QR berhasil disimpan!')),
+        );
+      } catch (e) {
       scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(content: Text('Error: ${e.toString()}')),
       );
@@ -281,12 +360,10 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
             backgroundColor: Colors.white,
             onPressed: () async {
               if (qrCodes.where((q) => q['locked'] == false).isNotEmpty) {
-                await _saveAllQrCodesToPdf;
-                setState(() {
-                  for (var qr in qrCodes) {
-                    qr['locked'] = true;
-                  }
-                });
+                // PANGGIL FUNGSI DENGAN TANDA KURUNG DAN ARGUMEN
+                await _saveAllQrCodesToPdf(_pdfViewerController);
+                // `setState` setelahnya tidak lagi diperlukan di sini,
+                // karena sudah diatur di dalam _saveAllQrCodesToPdf
               } else {
                 _addNewQrCode();
               }
