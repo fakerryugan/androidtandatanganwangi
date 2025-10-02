@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "743503458929",
+    "project_id": "tandatangan-4e861",
+    "storage_bucket": "tandatangan-4e861.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:743503458929:android:762f940154024512e921d0",
+        "android_client_info": {
+          "package_name": "com.example.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDW_GhvXYJ5I7oOIY6FJzcskH5j1E2mlSI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
