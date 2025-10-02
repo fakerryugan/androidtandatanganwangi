@@ -918,7 +918,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
               style: const TextStyle(color: Colors.black),
             ),
             icon: Icon(
-              hasActiveQr ? Icons.save : Icons.add, // Ganti ikon menjadi '+'
+              hasActiveQr ? Icons.add : Icons.save, // Ganti ikon menjadi '+'
               color: Colors.black,
             ),
           ),
