@@ -41,7 +41,7 @@ dependencies:
   qr_flutter: ^4.1.0
   syncfusion_flutter_pdf: ^31.1.0
   image: ^4.2.0
-  pdfx: ^2.4.0
+  pdfx: ^2.9.2
   open_filex: ^4.7.0
   flutter_pdfview: ^1.4.0+1
 

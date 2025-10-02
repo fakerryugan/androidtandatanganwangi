@@ -67,8 +67,8 @@ class _ResizableQrCodeState extends State<ResizableQrCode> {
               ),
             ),
             Positioned(
-              right: -12,
-              bottom: -12,
+              right: -10,
+              bottom: -10,
               child: GestureDetector(
                 onPanUpdate: (details) {
                   setState(() {
