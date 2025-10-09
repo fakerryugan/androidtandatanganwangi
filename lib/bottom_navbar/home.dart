@@ -264,7 +264,7 @@ class HomePage extends StatelessWidget {
         ),
         const SizedBox(height: 6),
         SizedBox(
-          height: 30, // area teks tetap
+          height: 30,
           child: Center(
             child: Text(
               label,

@@ -14,7 +14,9 @@ class Fileverifikasi extends StatefulWidget {
 class _FileverifikasiState extends State<Fileverifikasi> {
   bool isLoading = true;
   List<Map<String, dynamic>> documents = [];
+  List<Map<String, dynamic>> _filteredDocuments = [];
   String errorMessage = '';
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -35,6 +37,7 @@ class _FileverifikasiState extends State<Fileverifikasi> {
         if (data['status'] == true) {
           setState(() {
             documents = List<Map<String, dynamic>>.from(data['documents']);
+            _filteredDocuments = documents;
             errorMessage = '';
           });
         } else {
@@ -57,6 +60,19 @@ class _FileverifikasiState extends State<Fileverifikasi> {
     }
   }
 
+  void _filterDocuments(String query) {
+    setState(() {
+      _searchQuery = query.toLowerCase();
+      _filteredDocuments = documents
+          .where(
+            (doc) => (doc['original_name'] ?? '').toLowerCase().contains(
+              _searchQuery,
+            ),
+          )
+          .toList();
+    });
+  }
+
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -75,9 +91,16 @@ class _FileverifikasiState extends State<Fileverifikasi> {
             ),
           ),
           const SizedBox(width: 12),
-          const Text('Cari file', style: TextStyle(fontSize: 15)),
-          const Spacer(),
-          const Icon(Icons.person, size: 40),
+          Expanded(
+            child: TextField(
+              onChanged: _filterDocuments,
+              decoration: const InputDecoration(
+                hintText: 'Cari file...',
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          const Icon(Icons.search, color: Colors.grey),
         ],
       ),
     );
@@ -101,9 +124,9 @@ class _FileverifikasiState extends State<Fileverifikasi> {
     return RefreshIndicator(
       onRefresh: _muatDokumen,
       child: ListView.builder(
-        itemCount: documents.length,
+        itemCount: _filteredDocuments.length,
         itemBuilder: (context, index) {
-          final doc = documents[index];
+          final doc = _filteredDocuments[index];
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: ListTile(
@@ -200,7 +223,7 @@ class _FileverifikasiState extends State<Fileverifikasi> {
                     ? const Center(child: CircularProgressIndicator())
                     : errorMessage.isNotEmpty
                     ? Center(child: Text(errorMessage))
-                    : documents.isNotEmpty
+                    : _filteredDocuments.isNotEmpty
                     ? _buildDocumentList()
                     : const Center(child: Text('Tidak ada dokumen')),
               ),

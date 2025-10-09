@@ -11,6 +11,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api/loginsystem.dart';
 
+import 'package:android/verifikasi/verifikasi.dart';
+
 final GlobalKey<NavigatorState> navigatorkey = GlobalKey<NavigatorState>();
 
 void main() async {
@@ -25,60 +27,99 @@ Future<void> _requestPermission() async {
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   NotificationSettings settings = await messaging.requestPermission();
   if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-    print("diijinkan");
+    print("Notifikasi diizinkan oleh pengguna.");
   } else {
-    print("tidak diijinkan");
+    print("Pengguna menolak izin notifikasi.");
   }
 }
 
 void _setupFCMListeners() {
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    print("Menerima notifikasi saat aplikasi di foreground!");
     if (message.notification != null) {
       _showForegroundDialog(
         message.notification!.title,
         message.notification!.body,
+        () => _handleMessage(message),
       );
     }
   });
 
   FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    print("Notifikasi ditekan saat aplikasi di background.");
     _handleMessage(message);
   });
 
   _checkInitialMessage();
 }
 
+// ✅ INI ADALAH FUNGSI KUNCI SEBAGAI "OTAK" NAVIGASI
 void _handleMessage(RemoteMessage message) {
-  navigatorkey.currentState?.push(
-    MaterialPageRoute(
-      builder: (context) {
-        return NotificationScreen(
-          message: message.notification?.body ?? "no message",
-        );
-      },
-    ),
-  );
+  final String? screen = message.data['target_screen'];
+  final String? docId = message.data['document_id'];
+  final String? signToken = message.data['sign_token'];
+  final String? accessToken = message.data['access_token'];
+
+  print("Mencoba navigasi ke: $screen dengan ID: $docId");
+
+  if (screen == 'verification' &&
+      docId != null &&
+      signToken != null &&
+      accessToken != null) {
+    navigatorkey.currentState?.push(
+      MaterialPageRoute(
+        builder: (context) => PdfReviewScreen(
+          documentId: docId,
+          signToken: signToken,
+          accessToken: accessToken,
+        ),
+      ),
+    );
+  } else {
+    print(
+      "Data notifikasi tidak lengkap atau bukan untuk verifikasi. Data: ${message.data}",
+    );
+    navigatorkey.currentState?.push(
+      MaterialPageRoute(
+        builder: (context) => NotificationScreen(
+          message: message.notification?.body ?? "Tidak ada pesan",
+        ),
+      ),
+    );
+  }
 }
 
 void _checkInitialMessage() async {
   RemoteMessage? initialMessage = await FirebaseMessaging.instance
       .getInitialMessage();
   if (initialMessage != null) {
+    print("Membuka aplikasi dari notifikasi yang sudah mati.");
     _handleMessage(initialMessage);
   }
 }
 
-void _showForegroundDialog(String? title, String? body) {
+void _showForegroundDialog(
+  String? title,
+  String? body,
+  VoidCallback onActionPressed,
+) {
   showDialog(
     context: navigatorkey.currentState!.overlay!.context,
     builder: (context) {
       return AlertDialog(
-        title: Text(title ?? "no title"),
-        content: Text(body ?? "no body"),
+        title: Text(title ?? "Notifikasi Baru"),
+        content: Text(body ?? "Anda menerima pesan baru."),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("ok"),
+            child: const Text("Tutup"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context); // Tutup dialog dulu
+              onActionPressed(); // Lalu lakukan navigasi
+            },
+            child: const Text("Lihat"),
           ),
         ],
       );
@@ -122,9 +163,9 @@ class MyApp extends StatelessWidget {
               );
             } else {
               if (snapshot.data == true) {
-                return const MyBottomNavBar(); // ✅ Sudah login
+                return const MyBottomNavBar();
               } else {
-                return const LoginPage(); // ❌ Belum login
+                return const LoginPage();
               }
             }
           },
@@ -141,7 +182,7 @@ class NotificationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Notification")),
+      appBar: AppBar(title: const Text("Notifikasi")),
       body: Center(child: Text(message)),
     );
   }

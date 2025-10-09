@@ -11,6 +11,8 @@ class LihatSemuaPage extends StatefulWidget {
 class _LihatSemuaPageState extends State<LihatSemuaPage> {
   bool isLoading = true;
   List<Map<String, dynamic>> documents = [];
+  List<Map<String, dynamic>> filteredDocuments = [];
+  TextEditingController searchController = TextEditingController();
 
   @override
   void initState() {
@@ -22,7 +24,19 @@ class _LihatSemuaPageState extends State<LihatSemuaPage> {
     final result = await fetchUserDocuments();
     setState(() {
       documents = result;
+      filteredDocuments = result;
       isLoading = false;
+    });
+  }
+
+  void filterDocuments(String query) {
+    final filtered = documents.where((doc) {
+      final name = (doc['original_name'] ?? '').toLowerCase();
+      return name.contains(query.toLowerCase());
+    }).toList();
+
+    setState(() {
+      filteredDocuments = filtered;
     });
   }
 
@@ -52,23 +66,17 @@ class _LihatSemuaPageState extends State<LihatSemuaPage> {
               ),
               child: Row(
                 children: [
-                  ClipOval(
-                    child: SizedBox(
-                      width: 50,
-                      height: 50,
-                      child: Image.asset(
-                        'assets/images/pp.png',
-                        fit: BoxFit.cover,
+                  Expanded(
+                    child: TextField(
+                      controller: searchController,
+                      onChanged: filterDocuments,
+                      decoration: const InputDecoration(
+                        hintText: 'Cari file...',
+                        border: InputBorder.none,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Cari file',
-                    style: TextStyle(fontSize: 15, color: Colors.black),
-                  ),
-                  const Spacer(),
-                  const Icon(Icons.person, size: 40, color: Colors.black),
+                  const Icon(Icons.search, color: Colors.black),
                 ],
               ),
             ),
@@ -91,11 +99,11 @@ class _LihatSemuaPageState extends State<LihatSemuaPage> {
                 width: double.infinity,
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : documents.isNotEmpty
+                    : filteredDocuments.isNotEmpty
                     ? ListView.builder(
-                        itemCount: documents.length,
+                        itemCount: filteredDocuments.length,
                         itemBuilder: (context, index) {
-                          final file = documents[index];
+                          final file = filteredDocuments[index];
                           return ListTile(
                             leading: const Icon(
                               Icons.insert_drive_file,
@@ -115,9 +123,7 @@ class _LihatSemuaPageState extends State<LihatSemuaPage> {
                           );
                         },
                       )
-                    : const Center(
-                        child: Text('Belum ada dokumen yang diunggah.'),
-                      ),
+                    : const Center(child: Text('Dokumen tidak ditemukan.')),
               ),
             ),
           ],

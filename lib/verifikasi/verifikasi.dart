@@ -36,8 +36,14 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
   }
 
   Future<void> _loadPdf() async {
+    print('⏳ [DEBUG] Mulai memuat dokumen PDF...');
     try {
       final token = await getToken();
+      print('🔑 [DEBUG] Token didapat: $token');
+      print(
+        '🌐 [DEBUG] Meminta dokumen dari: $baseUrl/documents/review/${widget.accessToken}',
+      );
+
       final response = await http.post(
         Uri.parse('$baseUrl/documents/review/${widget.accessToken}'),
         headers: {
@@ -46,10 +52,14 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
         },
       );
 
+      print('📩 [DEBUG] Response Status Code: ${response.statusCode}');
+
       if (response.statusCode == 200) {
         final dir = await getTemporaryDirectory();
         final file = File('${dir.path}/document_${widget.documentId}.pdf');
         await file.writeAsBytes(response.bodyBytes);
+
+        print('✅ [DEBUG] PDF berhasil disimpan di: ${file.path}');
 
         setState(() {
           _pdfPath = file.path;
@@ -57,9 +67,11 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
         });
       } else {
         final errorData = jsonDecode(response.body);
+        print('❌ [DEBUG] Gagal memuat PDF: ${errorData['message']}');
         throw Exception(errorData['message'] ?? 'Failed to load PDF');
       }
     } catch (e) {
+      print('💥 [DEBUG] Terjadi error saat memuat PDF: $e');
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
@@ -68,8 +80,14 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
   }
 
   Future<void> _processSignature(String status) async {
+    print('🖋️ [DEBUG] Mulai proses tanda tangan dengan status: $status');
     try {
       final token = await getToken();
+      print('🔑 [DEBUG] Token didapat: $token');
+      print(
+        '🌐 [DEBUG] Kirim POST ke: $baseUrl/documents/signature/${widget.signToken}',
+      );
+
       final response = await http.post(
         Uri.parse('$baseUrl/documents/signature/${widget.signToken}'),
         headers: {
@@ -80,9 +98,16 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
         body: jsonEncode({'status': status}),
       );
 
+      print('📩 [DEBUG] Response Status Code: ${response.statusCode}');
+      print('📦 [DEBUG] Response Body: ${response.body}');
+
       final responseData = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        print('✅ [DEBUG] Proses tanda tangan berhasil');
+        print('📝 Pesan: ${responseData['message']}');
+        print('📄 Dokumen diverifikasi: ${responseData['document_verified']}');
+
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(responseData['message'])));
@@ -91,16 +116,21 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
           'document_verified': responseData['document_verified'] ?? false,
         });
       } else if (response.statusCode == 409) {
+        print('⚠️ [DEBUG] Tanda tangan sudah pernah diproses sebelumnya');
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(responseData['message'])));
         Navigator.pop(context);
       } else {
+        print(
+          '❌ [DEBUG] Gagal memproses tanda tangan: ${responseData['message']}',
+        );
         throw Exception(
           responseData['message'] ?? 'Failed to process signature',
         );
       }
     } catch (e) {
+      print('💥 [DEBUG] Error saat proses tanda tangan: $e');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
@@ -108,6 +138,7 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
   }
 
   void _confirmRejectAction() {
+    print('🚫 [DEBUG] Tombol "Tolak" ditekan');
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -115,11 +146,15 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
         content: const Text('Anda yakin ingin menolak dokumen ini?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              print('↩️ [DEBUG] Aksi tolak dibatalkan');
+              Navigator.pop(context);
+            },
             child: const Text('Batal'),
           ),
           TextButton(
             onPressed: () {
+              print('🚫 [DEBUG] Dokumen akan ditolak');
               Navigator.pop(context);
               _processSignature('rejected');
             },
@@ -131,6 +166,7 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
   }
 
   void _confirmApproveAction() {
+    print('✅ [DEBUG] Tombol "Setujui" ditekan');
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -138,11 +174,15 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
         content: const Text('Anda yakin ingin menyetujui dokumen ini?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              print('↩️ [DEBUG] Aksi setuju dibatalkan');
+              Navigator.pop(context);
+            },
             child: const Text('Batal'),
           ),
           TextButton(
             onPressed: () {
+              print('✅ [DEBUG] Dokumen akan disetujui');
               Navigator.pop(context);
               _processSignature('approved');
             },
@@ -197,7 +237,10 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
                     Icons.arrow_back_outlined,
                     color: Color(0xFF172B4C),
                   ),
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    print('↩️ [DEBUG] Tombol "Kembali" ditekan');
+                    Navigator.pop(context);
+                  },
                 ),
               ),
               const SizedBox(width: 40),
@@ -222,7 +265,7 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
               Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color.fromARGB(255, 8, 224, 76),
+                  color: const Color.fromARGB(255, 8, 224, 76),
                   border: Border.all(
                     color: const Color.fromARGB(255, 8, 224, 76),
                     width: 2,
@@ -273,12 +316,21 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
           swipeHorizontal: false,
           autoSpacing: false,
           pageFling: false,
-          onRender: (pages) => setState(() => _totalPages = pages),
-          onError: (error) => setState(() => _errorMessage = error.toString()),
-          onPageChanged: (page, total) => setState(() {
-            _currentPage = (page ?? 0) + 1;
-            _totalPages = total;
-          }),
+          onRender: (pages) {
+            print('📄 [DEBUG] PDF dirender dengan $pages halaman');
+            setState(() => _totalPages = pages);
+          },
+          onError: (error) {
+            print('💥 [DEBUG] Error render PDF: $error');
+            setState(() => _errorMessage = error.toString());
+          },
+          onPageChanged: (page, total) {
+            print('📑 [DEBUG] Halaman: ${(page ?? 0) + 1} / $total');
+            setState(() {
+              _currentPage = (page ?? 0) + 1;
+              _totalPages = total;
+            });
+          },
         ),
         if (_currentPage != null && _totalPages != null)
           Positioned(
