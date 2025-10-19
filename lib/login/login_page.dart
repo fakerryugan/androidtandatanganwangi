@@ -73,7 +73,9 @@ class LoginPage extends StatelessWidget {
                         ),
                       ],
                     ),
-                    padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                    ),
                     child: Center(
                       child: Column(
                         children: [
@@ -90,9 +92,12 @@ class LoginPage extends StatelessWidget {
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
+                              key: const Key('login_button_awal'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.blueAccent,
-                                padding: const EdgeInsets.symmetric(vertical: 15),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 15,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),

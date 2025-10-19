@@ -67,6 +67,7 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                   ),
                   const SizedBox(height: 20),
                   ElevatedButton(
+                    key: const Key('okkk'),
                     onPressed: () => Navigator.of(context).pop(),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE53935),
@@ -199,6 +200,7 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                           child: Column(
                             children: [
                               TextField(
+                                key: const Key('username_field'),
                                 controller: _usernameController,
                                 decoration: const InputDecoration(
                                   labelText: 'Username',
@@ -207,6 +209,7 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                               ),
                               SizedBox(height: size.height * 0.03),
                               TextField(
+                                key: const Key('password_field'),
                                 controller: _passwordController,
                                 obscureText: true,
                                 decoration: const InputDecoration(
@@ -218,6 +221,7 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton(
+                                  key: const Key('login_button_masuk'),
                                   onPressed: isLoading
                                       ? null
                                       : () {

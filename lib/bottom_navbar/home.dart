@@ -137,6 +137,7 @@ class HomePage extends StatelessWidget {
                                             context,
                                           );
                                         },
+                                        key: const Key('upload_file_button'),
                                       ),
                                     ),
                                     Expanded(
@@ -245,11 +246,17 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget buildButton(IconData icon, String label, VoidCallback onPressed) {
+  Widget buildButton(
+    IconData icon,
+    String label,
+    VoidCallback onPressed, {
+    Key? key,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         OutlinedButton(
+          key: key,
           style: OutlinedButton.styleFrom(
             backgroundColor: const Color.fromRGBO(23, 43, 76, 1),
             side: const BorderSide(color: Colors.black),

@@ -35,12 +35,17 @@ class PdfViewerPage extends StatefulWidget {
   State<PdfViewerPage> createState() => _PdfViewerPageState();
 }
 
+// GANTI SELURUH CLASS _PdfViewerPageState ANDA DENGAN INI
+
 class _PdfViewerPageState extends State<PdfViewerPage> {
   final PageController _pageController = PageController();
 
   bool _isLoadingPdf = true;
   List<Uint8List> _pageImages = [];
   List<Size> _pdfPageSizes = [];
+
+  // ✅ BARU: Daftar GlobalKey untuk mengukur setiap halaman PDF di layar
+  List<GlobalKey> _pageKeys = [];
 
   final ValueNotifier<Map<String, dynamic>?> _activeQrNotifier = ValueNotifier(
     null,
@@ -102,6 +107,8 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       setState(() {
         _pageImages = images;
         _pdfPageSizes = pageSizes;
+        // ✅ BARU: Inisialisasi GlobalKey sebanyak jumlah halaman
+        _pageKeys = List.generate(images.length, (_) => GlobalKey());
         _isLoadingPdf = false;
       });
     } catch (e) {
@@ -112,6 +119,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     }
   }
 
+  // 👇 PERUBAHAN UTAMA ADA DI FUNGSI INI 👇
   Future<void> _saveActiveQrToPdf() async {
     if (_activeQrNotifier.value == null || _isProcessing) return;
     setState(() => _isProcessing = true);
@@ -119,9 +127,61 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
     try {
       final qrToSave = _activeQrNotifier.value!;
-      final viewSize = context.size;
+      final int pageIndex = (qrToSave['selected_page'] as int) - 1;
 
-      if (viewSize == null) throw Exception('Gagal mendapatkan ukuran view.');
+      // --- 🎯 BLOK PENGUKURAN DAN PERHITUNGAN KOORDINAT BARU 🎯 ---
+
+      // 1. Dapatkan RenderBox dari gambar PDF yang sedang ditampilkan menggunakan GlobalKey.
+      //    RenderBox memberi kita ukuran dan posisi widget yang sebenarnya di layar.
+      final GlobalKey pageKey = _pageKeys[pageIndex];
+      final RenderBox? pageRenderBox =
+          pageKey.currentContext?.findRenderObject() as RenderBox?;
+      if (pageRenderBox == null || !pageRenderBox.hasSize) {
+        throw Exception('Gagal mengukur area PDF. Coba lagi.');
+      }
+
+      // 2. Dapatkan batas (posisi dan ukuran) gambar PDF di layar.
+      final pdfImageSizeOnScreen = pageRenderBox.size;
+      final pdfImagePositionOnScreen = pageRenderBox.localToGlobal(Offset.zero);
+      final Rect pdfImageBoundsOnScreen =
+          pdfImagePositionOnScreen & pdfImageSizeOnScreen;
+
+      // 3. Dapatkan data QR dari state.
+      final Offset qrPositionOnScreen = qrToSave['position'] as Offset;
+      final double qrSizeOnScreen = qrToSave['size'] as double;
+      final String signToken = qrToSave['sign_token'] as String;
+
+      // 4. Hitung posisi QR relatif terhadap pojok kiri atas *gambar PDF*, bukan layar.
+      final Offset relativeQrPosition = Offset(
+        qrPositionOnScreen.dx - pdfImageBoundsOnScreen.left,
+        qrPositionOnScreen.dy - pdfImageBoundsOnScreen.top,
+      );
+
+      // 5. Hitung faktor skala antara ukuran PDF asli (dalam points) dan ukuran gambar di layar (dalam pixel).
+      final Size originalPdfPageSize = _pdfPageSizes[pageIndex];
+      final double scaleFactor =
+          originalPdfPageSize.width / pdfImageSizeOnScreen.width;
+
+      // 6. Konversikan posisi dan ukuran QR dari koordinat layar ke koordinat PDF.
+      final double pdfX = relativeQrPosition.dx * scaleFactor;
+      final double pdfY = relativeQrPosition.dy * scaleFactor;
+      final double qrSizeInPdf = qrSizeOnScreen * scaleFactor;
+
+      final Rect finalRect = Rect.fromLTWH(
+        pdfX,
+        pdfY,
+        qrSizeInPdf,
+        qrSizeInPdf,
+      );
+
+      debugPrint("--- Kalkulasi Posisi QR ---");
+      debugPrint("Ukuran PDF Asli: $originalPdfPageSize");
+      debugPrint("Batas Gambar di Layar: $pdfImageBoundsOnScreen");
+      debugPrint("Posisi QR di Layar: $qrPositionOnScreen");
+      debugPrint("Posisi QR Relatif: $relativeQrPosition");
+      debugPrint("Faktor Skala: $scaleFactor");
+      debugPrint("Rect Final di PDF: $finalRect");
+      // --- AKHIR BLOK PENGUKURAN ---
 
       scaffold?.showSnackBar(
         const SnackBar(content: Text('Menyimpan QR ke PDF...')),
@@ -132,72 +192,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         inputBytes: originalFileBytes,
       );
 
-      final int pageIndex = (qrToSave['selected_page'] as int) - 1;
       if (pageIndex < 0 || pageIndex >= document.pages.count) {
         throw Exception('Halaman #${pageIndex + 1} tidak valid.');
       }
       final pdf_lib.PdfPage pdfPage = document.pages[pageIndex];
-      final Size pdfPageSize = _pdfPageSizes[pageIndex];
       final pdf_lib.PdfGraphics graphics = pdfPage.graphics;
-
-      final Offset positionOnScreen = qrToSave['position'] as Offset;
-      final double sizeOnScreen = qrToSave['size'] as double;
-      final String signToken = qrToSave['sign_token'] as String;
-
-      // --- LOGIKA PERHITUNGAN ASPECT RATIO (TIDAK BERUBAH) ---
-      final double viewAspectRatio = viewSize.width / viewSize.height;
-      final double pdfPageAspectRatio = pdfPageSize.width / pdfPageSize.height;
-      Size renderedImageSize;
-      Offset imagePadding;
-      if (pdfPageAspectRatio > viewAspectRatio) {
-        renderedImageSize = Size(
-          viewSize.width,
-          viewSize.width / pdfPageAspectRatio,
-        );
-        imagePadding = Offset(
-          0,
-          (viewSize.height - renderedImageSize.height) / 2,
-        );
-      } else {
-        renderedImageSize = Size(
-          viewSize.height * pdfPageAspectRatio,
-          viewSize.height,
-        );
-        imagePadding = Offset(
-          (viewSize.width - renderedImageSize.width) / 2,
-          0,
-        );
-      }
-
-      // --- ✅ BLOK PERHITUNGAN KOORDINAT YANG SUDAH DIPERBAIKI ---
-      // Koreksi untuk status bar dan AppBar. Sesuaikan nilai ini jika posisi vertikal masih sedikit meleset.
-      // --- ✅ BLOK PERHITUNGAN KOORDINAT YANG SUDAH DIPERBAIKI ---
-      final Offset positionOnImage = Offset(
-        positionOnScreen.dx - imagePadding.dx,
-        positionOnScreen.dy - imagePadding.dy,
-      );
-
-      final double scale = pdfPageSize.width / renderedImageSize.width;
-
-      // ✅ TAMBAHKAN KOREKSI DINAMIS DI SINI
-      // Ubah angka 0.5 (50%) ini jika perlu untuk penyesuaian.
-      const double FAKTOR_KOREKSI_Y = 0.5;
-      final double koreksiDinamis = kToolbarHeight * FAKTOR_KOREKSI_Y;
-
-      final double pdfX = positionOnImage.dx * scale;
-      // ✅ UBAH BARIS INI untuk menerapkan koreksi
-      final double pdfY = (positionOnImage.dy * scale) + koreksiDinamis;
-      final double qrSizeInPdf = sizeOnScreen * scale;
-
-      // Buat Rect untuk digambar dengan origin di KIRI ATAS.
-      final Rect finalRect = Rect.fromLTWH(
-        pdfX,
-        pdfY,
-        qrSizeInPdf,
-        qrSizeInPdf,
-      );
-
-      debugPrint("Rect Final yang digambar: $finalRect");
 
       final imageBytes = await QrPainter(
         data: signToken,
@@ -205,13 +204,12 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         gapless: true,
       ).toImageData(2048);
       if (imageBytes == null) throw Exception('Gagal membuat gambar QR.');
+
       final pdf_lib.PdfBitmap pdfImage = pdf_lib.PdfBitmap(
         imageBytes.buffer.asUint8List(),
       );
-
       graphics.drawImage(pdfImage, finalRect);
 
-      // --- SISA KODE (TIDAK BERUBAH) ---
       final tempPath =
           '${Directory.systemTemp.path}/temp_${DateTime.now().millisecondsSinceEpoch}.pdf';
       await File(tempPath).writeAsBytes(await document.save());
@@ -251,8 +249,13 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                   controller: _pageController,
                   itemCount: _pageImages.length,
                   itemBuilder: (context, index) {
+                    // ✅ BARU: Bungkus gambar dengan Container dan berikan Key
                     return InteractiveViewer(
-                      child: Image.memory(_pageImages[index]),
+                      child: Container(
+                        key: _pageKeys[index], // <-- KUNCI PENGUKURAN
+                        alignment: Alignment.center,
+                        child: Image.memory(_pageImages[index]),
+                      ),
                     );
                   },
                   onPageChanged: (page) {
@@ -317,6 +320,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
             child: Padding(
               padding: const EdgeInsets.only(bottom: 70.0),
               child: FloatingActionButton.extended(
+                key: const Key('add_or_save_qr_button'),
                 backgroundColor: Colors.white,
                 onPressed: () {
                   if (hasActiveQr) {
@@ -345,7 +349,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     );
   }
 
-  // --- Sisa Widget dan Fungsi (tidak ada perubahan signifikan) ---
+  // --- Sisa Widget dan Fungsi (tidak ada perubahan signifikan, sama seperti kode Anda) ---
   final TextEditingController nipController = TextEditingController();
   final TextEditingController tujuanController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -448,15 +452,22 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
   Future<void> _sendDocument() async {
     try {
+      print('🟢 [DEBUG] Tombol "Kirim Dokumen" ditekan');
       setState(() => _isSending = true);
+
       final prefs = await SharedPreferences.getInstance();
       final authToken = prefs.getString('token');
+      print('🔑 [DEBUG] Token yang diambil: $authToken');
+
       if (authToken == null) throw Exception('Token tidak valid');
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/documents/replace/${widget.documentId}'),
-      );
+
+      final uri = Uri.parse('$baseUrl/documents/replace/${widget.documentId}');
+      print('🌐 [DEBUG] URL tujuan: $uri');
+      print('📄 [DEBUG] File yang akan dikirim: $_currentPdfPath');
+
+      var request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $authToken';
+
       request.files.add(
         await http.MultipartFile.fromPath(
           'pdf',
@@ -464,29 +475,42 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           contentType: MediaType('application', 'pdf'),
         ),
       );
+
+      print('🚀 [DEBUG] Mengirim request ke server...');
       var response = await request.send();
+      print('📩 [DEBUG] Status code: ${response.statusCode}');
+
+      var responseBody = await response.stream.bytesToString();
+      print('📦 [DEBUG] Body respon: $responseBody');
+
       if (response.statusCode == 200) {
         scaffoldMessengerKey.currentState?.showSnackBar(
-          const SnackBar(content: Text('Dokumen berhasil dikirim!')),
+          const SnackBar(content: Text('✅ Dokumen berhasil dikirim!')),
         );
-        if (mounted)
+        print('✅ [DEBUG] Dokumen berhasil dikirim, pindah halaman...');
+        if (mounted) {
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (_) => const MyBottomNavBar()),
             (route) => false,
           );
+        }
       } else {
-        var responseBody = await response.stream.bytesToString();
+        print('❌ [DEBUG] Gagal kirim dokumen: $responseBody');
         throw Exception(
           jsonDecode(responseBody)['message'] ?? 'Gagal mengirim dokumen',
         );
       }
     } catch (e) {
+      print('💥 [DEBUG] Error saat kirim dokumen: $e');
       scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(content: Text('Error: ${e.toString()}')),
       );
     } finally {
-      if (mounted) setState(() => _isSending = false);
+      if (mounted) {
+        setState(() => _isSending = false);
+        print('🔁 [DEBUG] Selesai proses pengiriman dokumen');
+      }
     }
   }
 

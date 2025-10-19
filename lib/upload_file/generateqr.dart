@@ -10,7 +10,6 @@ Future<Map<String, dynamic>?> showInputDialog({
   required int totalPages,
   required int documentId,
 }) async {
-
   return showDialog<Map<String, dynamic>>(
     context: context,
     builder: (context) => AlertDialog(
@@ -24,6 +23,7 @@ Future<Map<String, dynamic>?> showInputDialog({
             children: [
               Text('Tujuan Surat'),
               TextFormField(
+                key: const Key('tujuan_field'),
                 controller: tujuanController,
                 decoration: const InputDecoration(
                   hintText: 'Masukkan tujuan...',
@@ -35,6 +35,7 @@ Future<Map<String, dynamic>?> showInputDialog({
               const SizedBox(height: 12),
               Text('Ditujukan untuk'),
               TextFormField(
+                key: const Key('nip_field'),
                 controller: nipController,
                 decoration: const InputDecoration(
                   hintText: 'Kepada...',
@@ -44,8 +45,6 @@ Future<Map<String, dynamic>?> showInputDialog({
                     val == null || val.isEmpty ? 'Wajib diisi' : null,
               ),
               const SizedBox(height: 12),
-          
-  
             ],
           ),
         ),
@@ -62,6 +61,7 @@ Future<Map<String, dynamic>?> showInputDialog({
               child: const Text('Kembali'),
             ),
             ElevatedButton(
+              key: const Key('dialog_ok_button'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xff0A1E3F),
               ),
@@ -79,7 +79,6 @@ Future<Map<String, dynamic>?> showInputDialog({
 
                     Navigator.pop(context, {
                       'sign_token': result['sign_token'],
-  
                     });
 
                     nipController.clear();
