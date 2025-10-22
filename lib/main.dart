@@ -17,9 +17,6 @@ import 'package:android/verifikasi/verifikasi.dart';
 
 final GlobalKey<NavigatorState> navigatorkey = GlobalKey<NavigatorState>();
 
-// ====================================
-// ============ MAIN =================
-// ====================================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -27,10 +24,6 @@ void main() async {
   _setupFCMListeners();
   runApp(const MyApp());
 }
-
-// ====================================
-// ============ FIREBASE ==============
-// ====================================
 
 Future<void> _requestPermission() async {
   FirebaseMessaging messaging = FirebaseMessaging.instance;
@@ -152,20 +145,17 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
 
-    // 🔔 Dengarkan perubahan koneksi internet
     _subscription = Connectivity().onConnectivityChanged.listen((results) {
       final result = results.isNotEmpty
           ? results.first
           : ConnectivityResult.none;
 
       if (result == ConnectivityResult.none) {
-        // Tidak ada koneksi → tampilkan popup
         if (!_isDialogShown) {
           _isDialogShown = true;
           _showNoInternetDialog();
         }
       } else {
-        // Ada koneksi → tutup popup jika masih tampil
         if (_isDialogShown) {
           Navigator.of(
             navigatorkey.currentState!.overlay!.context,
@@ -217,6 +207,23 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<bool> checkLoginStatus() async {
+    const bool skipLogin = true;
+
+    if (skipLogin) {
+      final prefs = await SharedPreferences.getInstance();
+      final existingUser = prefs.getString('user');
+      if (existingUser == null) {
+        final dummyUser = jsonEncode({
+          'token': 'dummy_token_dev_123',
+          'id': 'dev_user_001',
+          'name': 'Developer',
+          'email': 'dev@localhost.local',
+        });
+        await prefs.setString('user', dummyUser);
+      }
+      return true;
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final userString = prefs.getString('user');
     if (userString != null) {
@@ -260,10 +267,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
-// ====================================
-// ======== HALAMAN NOTIFIKASI ========
-// ====================================
 
 class NotificationScreen extends StatelessWidget {
   final String message;

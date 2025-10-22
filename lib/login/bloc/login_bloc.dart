@@ -12,7 +12,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
   final LoginRepository repository;
 
   LoginBloc(this.repository) : super(LoginInitial()) {
-    // Event LoginRequested
     on<LoginRequested>((event, emit) async {
       emit(LoginLoading());
       try {
@@ -22,7 +21,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('user', jsonEncode(user.toJson()));
 
-          emit(LoginSuccess(user)); // ✅ kirim User, bukan String
+          emit(LoginSuccess(user));
         } else {
           emit(LoginFailure("Token tidak ditemukan"));
         }
@@ -31,7 +30,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       }
     });
 
-    // Event AppStarted → cek user tersimpan
     on<AppStarted>((event, emit) async {
       final prefs = await SharedPreferences.getInstance();
       final userString = prefs.getString('user');
@@ -50,7 +48,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       emit(LoginInitial());
     });
 
-    // Event LogoutRequested
     on<LogoutRequested>((event, emit) async {
       final prefs = await SharedPreferences.getInstance();
 
@@ -60,7 +57,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
         final tokenLogin = userMap['token'];
 
         try {
-          // panggil API logout di server
           final url = Uri.parse('http://fakerryugan.my.id/api/logout');
           final response = await http.post(
             url,
@@ -75,11 +71,9 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
             print("❌ Logout API gagal: ${response.body}");
           }
 
-          // hapus FCM token di server
           await LoginRepository().updateFcmToken(tokenLogin, "");
           print("✅ FCM token dihapus dari server");
 
-          // hapus FCM token di device
           await FirebaseMessaging.instance.deleteToken();
           print("✅ FCM token dihapus dari device");
         } catch (e) {
@@ -87,7 +81,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
         }
       }
 
-      await prefs.remove('user'); // hapus data user lokal
+      await prefs.remove('user');
       emit(LoginInitial());
     });
   }

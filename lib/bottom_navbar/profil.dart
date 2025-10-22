@@ -67,7 +67,6 @@ class ProfilPage extends StatelessWidget {
                       children: [
                         _buildProfileCard("NIP / NIM", state.nip),
                         _buildProfileCard("Role Aktif", state.role),
-                        // nanti bisa tambahkan field lain kalau API ada
                       ],
                     ),
                   ),

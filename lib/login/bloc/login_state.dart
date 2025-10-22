@@ -7,7 +7,7 @@ class LoginInitial extends LoginState {}
 class LoginLoading extends LoginState {}
 
 class LoginSuccess extends LoginState {
-  final User user; // ✅ simpan User, bukan String
+  final User user;
   LoginSuccess(this.user);
 }
 

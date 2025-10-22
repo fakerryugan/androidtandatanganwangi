@@ -1,11 +1,8 @@
-// menampilkanpdf.dart
-
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart'
-    as pdf_lib; // Library untuk MENULIS PDF
-import 'package:pdfx/pdfx.dart'; // ✅ BARU: Library untuk MEMBACA & MERENDER PDF
+import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf_lib;
+import 'package:pdfx/pdfx.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
@@ -35,8 +32,6 @@ class PdfViewerPage extends StatefulWidget {
   State<PdfViewerPage> createState() => _PdfViewerPageState();
 }
 
-// GANTI SELURUH CLASS _PdfViewerPageState ANDA DENGAN INI
-
 class _PdfViewerPageState extends State<PdfViewerPage> {
   final PageController _pageController = PageController();
 
@@ -44,7 +39,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   List<Uint8List> _pageImages = [];
   List<Size> _pdfPageSizes = [];
 
-  // ✅ BARU: Daftar GlobalKey untuk mengukur setiap halaman PDF di layar
   List<GlobalKey> _pageKeys = [];
 
   final ValueNotifier<Map<String, dynamic>?> _activeQrNotifier = ValueNotifier(
@@ -107,7 +101,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       setState(() {
         _pageImages = images;
         _pdfPageSizes = pageSizes;
-        // ✅ BARU: Inisialisasi GlobalKey sebanyak jumlah halaman
         _pageKeys = List.generate(images.length, (_) => GlobalKey());
         _isLoadingPdf = false;
       });
@@ -119,7 +112,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     }
   }
 
-  // 👇 PERUBAHAN UTAMA ADA DI FUNGSI INI 👇
   Future<void> _saveActiveQrToPdf() async {
     if (_activeQrNotifier.value == null || _isProcessing) return;
     setState(() => _isProcessing = true);
@@ -129,10 +121,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final qrToSave = _activeQrNotifier.value!;
       final int pageIndex = (qrToSave['selected_page'] as int) - 1;
 
-      // --- 🎯 BLOK PENGUKURAN DAN PERHITUNGAN KOORDINAT BARU 🎯 ---
-
-      // 1. Dapatkan RenderBox dari gambar PDF yang sedang ditampilkan menggunakan GlobalKey.
-      //    RenderBox memberi kita ukuran dan posisi widget yang sebenarnya di layar.
       final GlobalKey pageKey = _pageKeys[pageIndex];
       final RenderBox? pageRenderBox =
           pageKey.currentContext?.findRenderObject() as RenderBox?;
@@ -140,29 +128,24 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         throw Exception('Gagal mengukur area PDF. Coba lagi.');
       }
 
-      // 2. Dapatkan batas (posisi dan ukuran) gambar PDF di layar.
       final pdfImageSizeOnScreen = pageRenderBox.size;
       final pdfImagePositionOnScreen = pageRenderBox.localToGlobal(Offset.zero);
       final Rect pdfImageBoundsOnScreen =
           pdfImagePositionOnScreen & pdfImageSizeOnScreen;
 
-      // 3. Dapatkan data QR dari state.
       final Offset qrPositionOnScreen = qrToSave['position'] as Offset;
       final double qrSizeOnScreen = qrToSave['size'] as double;
       final String signToken = qrToSave['sign_token'] as String;
 
-      // 4. Hitung posisi QR relatif terhadap pojok kiri atas *gambar PDF*, bukan layar.
       final Offset relativeQrPosition = Offset(
         qrPositionOnScreen.dx - pdfImageBoundsOnScreen.left,
         qrPositionOnScreen.dy - pdfImageBoundsOnScreen.top,
       );
 
-      // 5. Hitung faktor skala antara ukuran PDF asli (dalam points) dan ukuran gambar di layar (dalam pixel).
       final Size originalPdfPageSize = _pdfPageSizes[pageIndex];
       final double scaleFactor =
           originalPdfPageSize.width / pdfImageSizeOnScreen.width;
 
-      // 6. Konversikan posisi dan ukuran QR dari koordinat layar ke koordinat PDF.
       final double pdfX = relativeQrPosition.dx * scaleFactor;
       final double pdfY = relativeQrPosition.dy * scaleFactor;
       final double qrSizeInPdf = qrSizeOnScreen * scaleFactor;
@@ -174,14 +157,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         qrSizeInPdf,
       );
 
-      debugPrint("--- Kalkulasi Posisi QR ---");
-      debugPrint("Ukuran PDF Asli: $originalPdfPageSize");
-      debugPrint("Batas Gambar di Layar: $pdfImageBoundsOnScreen");
       debugPrint("Posisi QR di Layar: $qrPositionOnScreen");
-      debugPrint("Posisi QR Relatif: $relativeQrPosition");
-      debugPrint("Faktor Skala: $scaleFactor");
-      debugPrint("Rect Final di PDF: $finalRect");
-      // --- AKHIR BLOK PENGUKURAN ---
 
       scaffold?.showSnackBar(
         const SnackBar(content: Text('Menyimpan QR ke PDF...')),
@@ -249,10 +225,9 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                   controller: _pageController,
                   itemCount: _pageImages.length,
                   itemBuilder: (context, index) {
-                    // ✅ BARU: Bungkus gambar dengan Container dan berikan Key
                     return InteractiveViewer(
                       child: Container(
-                        key: _pageKeys[index], // <-- KUNCI PENGUKURAN
+                        key: _pageKeys[index],
                         alignment: Alignment.center,
                         child: Image.memory(_pageImages[index]),
                       ),
@@ -262,7 +237,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                     if (_activeQrNotifier.value != null) {
                       _activeQrNotifier.value = {
                         ..._activeQrNotifier.value!,
-                        'selected_page': page + 1, // Halaman 1-based
+                        'selected_page': page + 1,
                       };
                     }
                   },
@@ -349,7 +324,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     );
   }
 
-  // --- Sisa Widget dan Fungsi (tidak ada perubahan signifikan, sama seperti kode Anda) ---
   final TextEditingController nipController = TextEditingController();
   final TextEditingController tujuanController = TextEditingController();
   final _formKey = GlobalKey<FormState>();

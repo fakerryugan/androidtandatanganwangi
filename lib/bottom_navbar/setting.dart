@@ -85,9 +85,7 @@ class _SettingPageState extends State<SettingPage> {
                           style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                        onTap: () {
-                          // Aksi ketika diklik
-                        },
+                        onTap: () {},
                       ),
                       const Divider(),
                       ListTile(

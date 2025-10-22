@@ -15,12 +15,53 @@ class LoginmasukPage extends StatefulWidget {
   State<LoginmasukPage> createState() => _LoginmasukPageState();
 }
 
-class _LoginmasukPageState extends State<LoginmasukPage> {
+class _LoginmasukPageState extends State<LoginmasukPage>
+    with TickerProviderStateMixin {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  late AnimationController _fadeController;
+  late AnimationController _slideController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeIn));
+
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeOutBack),
+        );
+
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.elasticOut),
+    );
+
+    _fadeController.forward();
+    Future.delayed(const Duration(milliseconds: 200), () {
+      _slideController.forward();
+    });
+  }
+
   @override
   void dispose() {
+    _fadeController.dispose();
+    _slideController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -117,13 +158,11 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
               String? fcmToken = await FirebaseMessaging.instance.getToken();
               print("token fcm user: $fcmToken");
 
-              // simpan token login (dari API) ke local storage
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('token', state.user.token);
 
-              // kirim token FCM ke server biar terhubung dengan user
               await LoginRepository().updateFcmToken(
-                state.user.token, // id user dari API login
+                state.user.token,
                 fcmToken ?? "",
               );
 
@@ -160,113 +199,257 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        SizedBox(
-                          width: logoSize,
-                          height: logoSize,
-                          child: Image.asset('assets/images/logo.png'),
+                        FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: ScaleTransition(
+                            scale: _scaleAnimation,
+                            child: SizedBox(
+                              width: logoSize,
+                              height: logoSize,
+                              child: Image.asset('assets/images/logo.png'),
+                            ),
+                          ),
                         ),
                         SizedBox(height: size.height * 0.03),
-                        const Text(
-                          'SELAMAT DATANG',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
+                        FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: const Text(
+                            'SELAMAT DATANG',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         SizedBox(height: size.height * 0.01),
-                        const Text(
-                          'APLIKASI DOKUMEN & TANDA TANGAN DIGITAL',
-                          style: TextStyle(color: Colors.white, fontSize: 12),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'POLITEKNIK NEGERI BANYUWANGI',
-                          style: TextStyle(color: Colors.white, fontSize: 12),
-                          textAlign: TextAlign.center,
-                        ),
-                        SizedBox(height: size.height * 0.05),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.shade300),
-                          ),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: horizontalPadding,
-                            vertical: 20,
-                          ),
+                        FadeTransition(
+                          opacity: _fadeAnimation,
                           child: Column(
                             children: [
-                              TextField(
-                                key: const Key('username_field'),
-                                controller: _usernameController,
-                                decoration: const InputDecoration(
-                                  labelText: 'Username',
-                                  border: OutlineInputBorder(),
+                              const Text(
+                                'APLIKASI DOKUMEN & TANDA TANGAN DIGITAL',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
                                 ),
+                                textAlign: TextAlign.center,
                               ),
-                              SizedBox(height: size.height * 0.03),
-                              TextField(
-                                key: const Key('password_field'),
-                                controller: _passwordController,
-                                obscureText: true,
-                                decoration: const InputDecoration(
-                                  labelText: 'Password',
-                                  border: OutlineInputBorder(),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'POLITEKNIK NEGERI BANYUWANGI',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
                                 ),
-                              ),
-                              SizedBox(height: size.height * 0.03),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  key: const Key('login_button_masuk'),
-                                  onPressed: isLoading
-                                      ? null
-                                      : () {
-                                          final username = _usernameController
-                                              .text
-                                              .trim();
-                                          final password =
-                                              _passwordController.text;
-
-                                          if (username.isEmpty ||
-                                              password.isEmpty) {
-                                            _showErrorDialog(
-                                              'Salah',
-                                              'Username dan Password harus diisi tidak boleh kosong',
-                                            );
-                                            return;
-                                          }
-
-                                          context.read<LoginBloc>().add(
-                                            LoginRequested(username, password),
-                                          );
-                                        },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blueAccent,
-                                    padding: EdgeInsets.symmetric(
-                                      vertical: size.height * 0.02,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                  child: isLoading
-                                      ? const CircularProgressIndicator(
-                                          color: Colors.white,
-                                        )
-                                      : const Text(
-                                          'Masuk',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                ),
+                                textAlign: TextAlign.center,
                               ),
                             ],
+                          ),
+                        ),
+                        SizedBox(height: size.height * 0.05),
+                        SlideTransition(
+                          position: _slideAnimation,
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade300),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.grey.withOpacity(0.3),
+                                    spreadRadius: 2,
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: horizontalPadding,
+                                vertical: 20,
+                              ),
+                              child: Column(
+                                children: [
+                                  SlideTransition(
+                                    position:
+                                        Tween<Offset>(
+                                          begin: const Offset(-0.5, 0),
+                                          end: Offset.zero,
+                                        ).animate(
+                                          CurvedAnimation(
+                                            parent: _slideController,
+                                            curve: const Interval(
+                                              0.2,
+                                              1.0,
+                                              curve: Curves.easeOut,
+                                            ),
+                                          ),
+                                        ),
+                                    child: FadeTransition(
+                                      opacity: _fadeAnimation,
+                                      child: TextField(
+                                        key: const Key('username_field'),
+                                        controller: _usernameController,
+                                        decoration: InputDecoration(
+                                          labelText: 'Username',
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          prefixIcon: const Icon(
+                                            Icons.person_outline,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: size.height * 0.03),
+                                  SlideTransition(
+                                    position:
+                                        Tween<Offset>(
+                                          begin: const Offset(0.5, 0),
+                                          end: Offset.zero,
+                                        ).animate(
+                                          CurvedAnimation(
+                                            parent: _slideController,
+                                            curve: const Interval(
+                                              0.4,
+                                              1.0,
+                                              curve: Curves.easeOut,
+                                            ),
+                                          ),
+                                        ),
+                                    child: FadeTransition(
+                                      opacity: _fadeAnimation,
+                                      child: TextField(
+                                        key: const Key('password_field'),
+                                        controller: _passwordController,
+                                        obscureText: true,
+                                        decoration: InputDecoration(
+                                          labelText: 'Password',
+                                          border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                          prefixIcon: const Icon(
+                                            Icons.lock_outline,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: size.height * 0.03),
+                                  SlideTransition(
+                                    position:
+                                        Tween<Offset>(
+                                          begin: const Offset(0, 0.5),
+                                          end: Offset.zero,
+                                        ).animate(
+                                          CurvedAnimation(
+                                            parent: _slideController,
+                                            curve: const Interval(
+                                              0.6,
+                                              1.0,
+                                              curve: Curves.easeOut,
+                                            ),
+                                          ),
+                                        ),
+                                    child: FadeTransition(
+                                      opacity: _fadeAnimation,
+                                      child: SizedBox(
+                                        width: double.infinity,
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 200,
+                                          ),
+                                          child: ElevatedButton(
+                                            key: const Key(
+                                              'login_button_masuk',
+                                            ),
+                                            onPressed: isLoading
+                                                ? null
+                                                : () {
+                                                    final username =
+                                                        _usernameController.text
+                                                            .trim();
+                                                    final password =
+                                                        _passwordController
+                                                            .text;
+
+                                                    if (username.isEmpty ||
+                                                        password.isEmpty) {
+                                                      _showErrorDialog(
+                                                        'Salah',
+                                                        'Username dan Password harus diisi tidak boleh kosong',
+                                                      );
+                                                      return;
+                                                    }
+
+                                                    context
+                                                        .read<LoginBloc>()
+                                                        .add(
+                                                          LoginRequested(
+                                                            username,
+                                                            password,
+                                                          ),
+                                                        );
+                                                  },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  const Color.fromRGBO(
+                                                    127,
+                                                    146,
+                                                    248,
+                                                    1,
+                                                  ),
+                                              elevation: 3,
+                                              shadowColor: Colors.blue
+                                                  .withOpacity(0.4),
+                                              padding: EdgeInsets.symmetric(
+                                                vertical: size.height * 0.02,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(25),
+                                              ),
+                                            ),
+                                            child: isLoading
+                                                ? const CircularProgressIndicator(
+                                                    color: Colors.white,
+                                                  )
+                                                : const Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.login,
+                                                        color: Colors.white,
+                                                      ),
+                                                      SizedBox(width: 8),
+                                                      Text(
+                                                        'Masuk',
+                                                        style: TextStyle(
+                                                          fontSize: 18,
+                                                          color: Colors.white,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],

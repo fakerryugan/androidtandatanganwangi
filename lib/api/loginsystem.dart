@@ -20,7 +20,7 @@ class LoginRepository {
       final token = data['access_token'];
       final userData = data['user'];
 
-      return User.fromJson(userData, token); // ✅ pakai token
+      return User.fromJson(userData, token);
     } else {
       throw Exception("Kredensial ini tidak cocok dengan catatan kami.");
     }
