@@ -169,14 +169,44 @@ class _FileverifikasiState extends State<Fileverifikasi> {
                 minimumSize: const Size(double.infinity, 50),
               ),
               onPressed: () {
+                final dynamic signTokenRaw = doc['sign_token'];
+                final dynamic accessTokenRaw = doc['access_token'];
+                final dynamic documentIdRaw = doc['document_id'];
+
+                final String? signToken = signTokenRaw != null
+                    ? signTokenRaw.toString()
+                    : null;
+                final String? accessToken = accessTokenRaw != null
+                    ? accessTokenRaw.toString()
+                    : null;
+                final String? documentId = documentIdRaw != null
+                    ? documentIdRaw.toString()
+                    : null;
+
+                if (signToken == null ||
+                    signToken.isEmpty ||
+                    accessToken == null ||
+                    accessToken.isEmpty ||
+                    documentId == null ||
+                    documentId.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Data dokumen tidak lengkap. Tidak dapat membuka review.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => PdfReviewScreen(
-                      signToken: doc['sign_token'],
-                      accessToken: doc['access_token'],
-                      documentId: doc['document_id'].toString(),
+                      signToken: signToken,
+                      accessToken: accessToken,
+                      documentId: documentId,
                     ),
                   ),
                 );
