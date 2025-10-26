@@ -46,6 +46,43 @@ Future<List<Map<String, dynamic>>> fetchUserDocuments() async {
   }
 }
 
+Future<List<Map<String, dynamic>>> fetchCompletedDocuments() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString(
+    'auth_token',
+  ); // Sesuaikan dengan key token Anda
+
+  if (token == null) {
+    print('Token tidak ditemukan');
+    return []; // Kembalikan list kosong jika tidak ada token
+  }
+
+  final response = await http.get(
+    Uri.parse('$baseUrl/documents/completed'), // Menggunakan endpoint baru
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    },
+  );
+
+  if (response.statusCode == 200) {
+    final data = json.decode(response.body);
+    // Pastikan data['documents'] adalah List
+    if (data['status'] == true && data['documents'] is List) {
+      // Konversi List<dynamic> ke List<Map<String, dynamic>>
+      return List<Map<String, dynamic>>.from(data['documents']);
+    } else {
+      print('Format data tidak sesuai atau status false');
+      return [];
+    }
+  } else {
+    print('Gagal memuat dokumen: ${response.statusCode}');
+    print('Response body: ${response.body}');
+    // Gagal memuat data, kembalikan list kosong
+    return [];
+  }
+}
+
 Future<http.Response?> downloadDocument(
   String accessToken,
   String encryptedName,
