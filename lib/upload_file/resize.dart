@@ -12,13 +12,13 @@ class ResizableQrCode extends StatefulWidget {
   final VoidCallback onDragEnd;
 
   const ResizableQrCode({
-    Key? key,
+    super.key,
     required this.qrData,
     required this.constraints,
     required this.onDragUpdate,
     required this.onResizeUpdate,
     required this.onDragEnd,
-  }) : super(key: key);
+  });
 
   @override
   _ResizableQrCodeState createState() => _ResizableQrCodeState();
@@ -62,7 +62,7 @@ class _ResizableQrCodeState extends State<ResizableQrCode> {
                 border: Border.all(color: Colors.red, width: 2),
               ),
               child: QrImageView(
-                data: "${baseUrl}/view/${widget.qrData['sign_token']}",
+                data: "$baseUrl/view/${widget.qrData['sign_token']}",
                 size: _size,
               ),
             ),

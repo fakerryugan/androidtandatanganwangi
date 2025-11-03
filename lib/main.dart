@@ -1,83 +1,99 @@
-import 'dart:convert';
 import 'dart:async';
+import 'package:android/core/services/tokenapi.dart'; // Pastikan path ini benar
+import 'package:android/features/dashboard/bloc/dashboard_bloc.dart';
+import 'package:android/features/dashboard/view/dashboard_page.dart';
+import 'package:android/features/filereviewverification/view/pdf_review_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:permission_handler/permission_handler.dart'; // <-- IMPORT BARU
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'firebase_options.dart';
-import 'api/loginsystem.dart';
-import 'package:android/login/login_page.dart';
-import 'package:android/login/bloc/login_bloc.dart';
-import 'package:android/bottom_navbar/bottom_navbar.dart';
-import 'package:android/bottom_navbar/home_bloc.dart';
-import 'package:android/verifikasi/verifikasi.dart';
+import 'features/auth/repository/login_repository.dart';
+import 'features/auth/view/login_page.dart';
+import 'features/auth/bloc/login_bloc.dart';
 
 final GlobalKey<NavigatorState> navigatorkey = GlobalKey<NavigatorState>();
 
-// ====================================
-// ============ MAIN =================
-// ====================================
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await _requestPermission();
+
+  // =================== BAGIAN YANG DIUBAH ===================
+  // 1. Meminta Izin Notifikasi (FCM)
+  await _requestFCMPermission();
+
+  // 2. Meminta Izin Penyimpanan (Storage)
+  await _requestStoragePermission();
+  // ==========================================================
+
   _setupFCMListeners();
   runApp(const MyApp());
 }
 
-// ====================================
-// ============ FIREBASE ==============
-// ====================================
+// ============== FUNGSI BARU UNTUK IZIN PENYIMPANAN ==============
+Future<void> _requestStoragePermission() async {
+  // Cek status izin saat ini
+  var status = await Permission.storage.status;
 
-Future<void> _requestPermission() async {
-  FirebaseMessaging messaging = FirebaseMessaging.instance;
-  NotificationSettings settings = await messaging.requestPermission();
-  if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-    print("✅ Notifikasi diizinkan oleh pengguna.");
+  // Jika izin belum diberikan, maka minta
+  if (!status.isGranted) {
+    // Meminta izin kepada pengguna
+    status = await Permission.storage.request();
+    print("Storage Permission status: $status");
+
+    // Jika pengguna menolak secara permanen, kita bisa tampilkan dialog
+    // untuk mengarahkan pengguna ke pengaturan aplikasi.
+    if (status.isPermanentlyDenied) {
+      // Anda bisa membuat dialog di sini untuk memberitahu pengguna
+      print(
+        "Storage permission is permanently denied, cannot request permissions.",
+      );
+    }
   } else {
-    print("🚫 Pengguna menolak izin notifikasi.");
+    print("Storage Permission already granted.");
   }
 }
 
+// =================== FCM (Nama fungsi diubah agar lebih jelas) ===================
+Future<void> _requestFCMPermission() async {
+  // Nama diubah dari _requestPermission
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
+  NotificationSettings settings = await messaging.requestPermission();
+  print("FCM Permission: ${settings.authorizationStatus}");
+}
+
+// ... Sisa kode Anda dari sini ke bawah tidak perlu diubah ...
+// (Saya sertakan lagi untuk kelengkapan)
+
 void _setupFCMListeners() {
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    print("📩 Notifikasi diterima saat aplikasi di foreground!");
-    if (message.notification != null) {
-      _showForegroundDialog(
-        message.notification!.title,
-        message.notification!.body,
-        () => _handleMessage(message),
-      );
-    }
+  FirebaseMessaging.onMessage.listen((message) {
+    print("Foreground message received: ${message.notification?.title}");
+    _showForegroundDialog(
+      message.notification?.title,
+      message.notification?.body,
+      () => _handleMessage(message),
+    );
   });
 
-  FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-    print("📬 Notifikasi ditekan saat aplikasi di background.");
-    _handleMessage(message);
-  });
-
+  FirebaseMessaging.onMessageOpenedApp.listen(_handleMessage);
   _checkInitialMessage();
 }
 
 void _checkInitialMessage() async {
   RemoteMessage? initialMessage = await FirebaseMessaging.instance
       .getInitialMessage();
-  if (initialMessage != null) {
-    print("🚀 Membuka aplikasi dari notifikasi yang sudah mati.");
-    _handleMessage(initialMessage);
-  }
+  if (initialMessage != null) _handleMessage(initialMessage);
 }
 
 void _handleMessage(RemoteMessage message) {
-  final String? screen = message.data['target_screen'];
-  final String? docId = message.data['document_id'];
-  final String? signToken = message.data['sign_token'];
-  final String? accessToken = message.data['access_token'];
-
-  print("➡️ Navigasi ke: $screen dengan ID: $docId");
+  final screen = message.data['target_screen'];
+  final docId = message.data['document_id'];
+  final signToken = message.data['sign_token'];
+  final accessToken = message.data['access_token'];
 
   if (screen == 'verification' &&
       docId != null &&
@@ -85,7 +101,7 @@ void _handleMessage(RemoteMessage message) {
       accessToken != null) {
     navigatorkey.currentState?.push(
       MaterialPageRoute(
-        builder: (context) => PdfReviewScreen(
+        builder: (_) => PdfReviewScreen(
           documentId: docId,
           signToken: signToken,
           accessToken: accessToken,
@@ -93,10 +109,9 @@ void _handleMessage(RemoteMessage message) {
       ),
     );
   } else {
-    print("⚠️ Data notifikasi tidak lengkap atau bukan untuk verifikasi.");
     navigatorkey.currentState?.push(
       MaterialPageRoute(
-        builder: (context) => NotificationScreen(
+        builder: (_) => NotificationScreen(
           message: message.notification?.body ?? "Tidak ada pesan",
         ),
       ),
@@ -109,79 +124,66 @@ void _showForegroundDialog(
   String? body,
   VoidCallback onActionPressed,
 ) {
+  final context = navigatorkey.currentContext;
+  if (context == null) return;
+
   showDialog(
-    context: navigatorkey.currentState!.overlay!.context,
-    builder: (context) {
-      return AlertDialog(
-        title: Text(title ?? "Notifikasi Baru"),
-        content: Text(body ?? "Anda menerima pesan baru."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Tutup"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              onActionPressed();
-            },
-            child: const Text("Lihat"),
-          ),
-        ],
-      );
-    },
+    context: context,
+    builder: (_) => AlertDialog(
+      title: Text(title ?? "Notifikasi Baru"),
+      content: Text(body ?? "Anda menerima pesan baru."),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Tutup"),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            onActionPressed();
+          },
+          child: const Text("Lihat"),
+        ),
+      ],
+    ),
   );
 }
 
-// ====================================
-// ======== APLIKASI UTAMA ============
-// ====================================
-
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
-
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  StreamSubscription<List<ConnectivityResult>>? _subscription;
+  late StreamSubscription<List<ConnectivityResult>> _subscription;
   bool _isDialogShown = false;
 
   @override
   void initState() {
     super.initState();
-
-    // 🔔 Dengarkan perubahan koneksi internet
     _subscription = Connectivity().onConnectivityChanged.listen((results) {
-      final result = results.isNotEmpty
-          ? results.first
-          : ConnectivityResult.none;
-
-      if (result == ConnectivityResult.none) {
-        // Tidak ada koneksi → tampilkan popup
-        if (!_isDialogShown) {
-          _isDialogShown = true;
-          _showNoInternetDialog();
-        }
-      } else {
-        // Ada koneksi → tutup popup jika masih tampil
-        if (_isDialogShown) {
-          Navigator.of(
-            navigatorkey.currentState!.overlay!.context,
-            rootNavigator: true,
-          ).pop();
+      if (results.contains(ConnectivityResult.none) && !_isDialogShown) {
+        _isDialogShown = true;
+        _showNoInternetDialog();
+      } else if (!results.contains(ConnectivityResult.none) && _isDialogShown) {
+        final context = navigatorkey.currentContext;
+        if (context != null && Navigator.of(context).canPop()) {
+          Navigator.of(context, rootNavigator: true).pop();
           _isDialogShown = false;
         }
       }
     });
   }
 
-  void _showNoInternetDialog() {
+  Future<void> _showNoInternetDialog() async {
+    final context = navigatorkey.currentContext;
+    if (context == null) return;
+
     showDialog(
-      context: navigatorkey.currentState!.overlay!.context,
+      context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         title: const Text("Koneksi Terputus"),
         content: const Text(
           "Tidak ada koneksi internet. Periksa jaringan Anda.",
@@ -189,18 +191,14 @@ class _MyAppState extends State<MyApp> {
         actions: [
           TextButton(
             onPressed: () async {
-              var results = await Connectivity().checkConnectivity();
-              final result = results.isNotEmpty
-                  ? results.first
-                  : ConnectivityResult.none;
-
-              if (result == ConnectivityResult.none) {
+              var connectivityResult = await Connectivity().checkConnectivity();
+              if (!connectivityResult.contains(ConnectivityResult.none)) {
+                Navigator.pop(context);
+                _isDialogShown = false;
+              } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text("Masih tidak ada koneksi...")),
                 );
-              } else {
-                Navigator.pop(context);
-                _isDialogShown = false;
               }
             },
             child: const Text("Coba Lagi"),
@@ -212,29 +210,23 @@ class _MyAppState extends State<MyApp> {
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    _subscription.cancel();
     super.dispose();
   }
 
   Future<bool> checkLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
-    final userString = prefs.getString('user');
-    if (userString != null) {
-      final userMap = jsonDecode(userString);
-      return userMap['token'] != null && userMap['token'].isNotEmpty;
-    }
-    return false;
+    final token = prefs.getString('token');
+    return token != null && token.isNotEmpty;
   }
 
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<LoginBloc>(
-          create: (context) => LoginBloc(LoginRepository()),
-        ),
-        BlocProvider<HomeBloc>(
-          create: (context) => HomeBloc()..add(LoadHomeData()),
+        BlocProvider<LoginBloc>(create: (_) => LoginBloc(LoginRepository())),
+        BlocProvider<DashboardBloc>(
+          create: (_) => DashboardBloc(apiService: ApiServiceImpl()),
         ),
       ],
       child: MaterialApp(
@@ -247,23 +239,17 @@ class _MyAppState extends State<MyApp> {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
-            } else {
-              if (snapshot.data == true) {
-                return const MyBottomNavBar();
-              } else {
-                return const LoginPage();
-              }
             }
+            if (snapshot.hasData && snapshot.data == true) {
+              return const DashboardPage();
+            }
+            return const LoginPage();
           },
         ),
       ),
     );
   }
 }
-
-// ====================================
-// ======== HALAMAN NOTIFIKASI ========
-// ====================================
 
 class NotificationScreen extends StatelessWidget {
   final String message;
