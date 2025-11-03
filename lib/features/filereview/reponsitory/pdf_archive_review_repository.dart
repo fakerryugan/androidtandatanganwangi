@@ -19,17 +19,12 @@ class PdfArchiveReviewRepository {
     );
 
     if (response.statusCode == 200) {
-      // --- PERBAIKAN UTAMA ADA DI SINI ---
-
-      // 2. Buat ID pendek dari encryptedName menggunakan hash MD5
-      // Pola ini sama seperti menggunakan documentId yang pendek.
       final bytes = utf8.encode(encryptedName);
       final digest = md5.convert(bytes);
       final shortUniqueId = digest.toString();
 
       final dir = await getTemporaryDirectory();
 
-      // 3. Gunakan ID pendek yang unik untuk nama file
       final file = File('${dir.path}/$shortUniqueId.pdf');
 
       print('Saving PDF to: ${file.path}');
