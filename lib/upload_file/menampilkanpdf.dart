@@ -1,26 +1,20 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:android/features/dashboard/view/menu_home.dart';
+import 'package:android/api/token.dart';
+
+import 'package:android/features/dashboard/view/dashboard_page.dart';
 import 'package:flutter/material.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart'
-    as pdf_lib; // Library untuk MENULIS PDF
-import 'package:pdfx/pdfx.dart'; // Library untuk MEMBACA & MERENDER PDF
-import 'package:qr_flutter/qr_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:http_parser/http_parser.dart';
-import 'dart:convert';
-
-// Pastikan Anda memiliki referensi yang benar ke file-file ini
-import '../api/token.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf_lib;
+import 'package:pdfx/pdfx.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:android/upload_file/generateqr.dart';
+import 'package:http_parser/http_parser.dart';
 
 // Kunci global untuk ScaffoldMessenger
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey();
-
-// =========================================================================
-// WIDGET UTAMA: PdfViewerPage
-// =========================================================================
 
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
@@ -54,7 +48,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   );
   List<Map<String, dynamic>> qrCodes = [];
   bool _isProcessing = false;
-  final bool _isSending = false;
+  bool _isSending = false;
   late String _currentPdfPath;
   static const double _initialQrSize = 100.0;
 
@@ -562,15 +556,125 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   }
 
   Future<void> _sendDocument() async {
-    // ... (Logika pengiriman file tidak berubah)
+    try {
+      print('🟢 [DEBUG] Tombol "Kirim Dokumen" ditekan');
+      setState(() => _isSending = true);
+
+      final prefs = await SharedPreferences.getInstance();
+      final authToken = prefs.getString('token');
+      print('🔑 [DEBUG] Token yang diambil: $authToken');
+
+      if (authToken == null) throw Exception('Token tidak valid');
+
+      final uri = Uri.parse('$baseUrl/documents/replace/${widget.documentId}');
+      print('🌐 [DEBUG] URL tujuan: $uri');
+      print('📄 [DEBUG] File yang akan dikirim: $_currentPdfPath');
+
+      var request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $authToken';
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'pdf',
+          _currentPdfPath,
+          contentType: MediaType('application', 'pdf'),
+        ),
+      );
+
+      print('🚀 [DEBUG] Mengirim request ke server...');
+      var response = await request.send();
+      print('📩 [DEBUG] Status code: ${response.statusCode}');
+
+      var responseBody = await response.stream.bytesToString();
+      print('📦 [DEBUG] Body respon: $responseBody');
+
+      if (response.statusCode == 200) {
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          const SnackBar(content: Text('✅ Dokumen berhasil dikirim!')),
+        );
+        print('✅ [DEBUG] Dokumen berhasil dikirim, pindah halaman...');
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const DashboardPage()),
+            (route) => false,
+          );
+        }
+      } else {
+        print('❌ [DEBUG] Gagal kirim dokumen: $responseBody');
+        throw Exception(
+          jsonDecode(responseBody)['message'] ?? 'Gagal mengirim dokumen',
+        );
+      }
+    } catch (e) {
+      print('💥 [DEBUG] Error saat kirim dokumen: $e');
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+        print('🔁 [DEBUG] Selesai proses pengiriman dokumen');
+      }
+    }
   }
 
-  Future<void> _showCancelConfirmationDialog() async {
-    // ... (Logika dialog batal tidak berubah)
-  }
+  Future<void> _showCancelConfirmationDialog() async => await showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Batalkan Dokumen'),
+      content: const Text('Apakah Anda yakin ingin membatalkan dokumen ini?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Tidak'),
+        ),
+        TextButton(
+          onPressed: _isProcessing
+              ? null
+              : () async {
+                  Navigator.of(context).pop();
+                  await _cancelDocumentRequest();
+                },
+          child: _isProcessing
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Ya, Batalkan'),
+        ),
+      ],
+    ),
+  );
 
   Future<void> _cancelDocumentRequest() async {
-    // ... (Logika pembatalan dokumen tidak berubah)
+    try {
+      setState(() => _isProcessing = true);
+      final response = await cancelDocument(widget.documentId);
+      if (response['success'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('document_id');
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text(response['message'] ?? 'Dokumen dibatalkan')),
+        );
+        if (mounted)
+          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const DashboardPage()),
+            (route) => false,
+          );
+      } else {
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text(response['message'] ?? 'Gagal membatalkan')),
+        );
+      }
+    } catch (e) {
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 }
 
