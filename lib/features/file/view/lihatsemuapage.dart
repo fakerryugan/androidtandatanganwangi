@@ -3,12 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/services/tokenapi.dart';
 import '../repository/files_repository.dart';
 import '../bloc/files_bloc.dart';
-import 'package:intl/intl.dart'; // Impor intl untuk format tanggal
+import 'package:intl/intl.dart';
 
 class LihatSemuaPage extends StatelessWidget {
   const LihatSemuaPage({super.key});
-
-  // --- FUNGSI HELPER UNTUK FORMAT TANGGAL ---
   String formatDate(String? dateStr) {
     if (dateStr == null) return 'N/A';
     try {
@@ -21,11 +19,10 @@ class LihatSemuaPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Sediakan BLoC baru ke widget tree halaman ini
     return BlocProvider(
       create: (context) =>
           FilesBloc(repository: FilesRepository(apiService: ApiServiceImpl()))
-            ..add(LoadAllFiles()), // Muat semua file saat halaman dibuka
+            ..add(LoadAllUserFiles()),
       child: Scaffold(
         body: Container(
           decoration: const BoxDecoration(
@@ -38,12 +35,10 @@ class LihatSemuaPage extends StatelessWidget {
               ],
             ),
           ),
-          // --- PENAMBAHAN SAFEAREA ---
           child: SafeArea(
             child: Column(
               children: [
                 const SizedBox(height: 12),
-                // Search bar sekarang mengambil event BLoC
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -102,7 +97,6 @@ class LihatSemuaPage extends StatelessWidget {
                       ),
                     ),
                     width: double.infinity,
-                    // Gunakan BlocBuilder untuk menampilkan state
                     child: BlocBuilder<FilesBloc, FilesState>(
                       builder: (context, state) {
                         if (state is FilesLoading) {
@@ -117,7 +111,9 @@ class LihatSemuaPage extends StatelessWidget {
                           if (state.filteredDocuments.isEmpty) {
                             return RefreshIndicator(
                               onRefresh: () async {
-                                context.read<FilesBloc>().add(LoadAllFiles());
+                                context.read<FilesBloc>().add(
+                                  LoadAllUserFiles(),
+                                );
                               },
                               child: ListView(
                                 physics: const AlwaysScrollableScrollPhysics(),
@@ -132,10 +128,9 @@ class LihatSemuaPage extends StatelessWidget {
                               ),
                             );
                           }
-                          // Build list dari filteredDocuments
                           return RefreshIndicator(
                             onRefresh: () async {
-                              context.read<FilesBloc>().add(LoadAllFiles());
+                              context.read<FilesBloc>().add(LoadAllUserFiles());
                             },
                             child: ListView.builder(
                               itemCount: state.filteredDocuments.length,

@@ -141,38 +141,6 @@ Future<Map<String, dynamic>> uploadDocument(File file) async {
   }
 }
 
-Future<Map<String, dynamic>> cancelDocument(int documentId) async {
-  try {
-    final token = await getToken();
-    if (token == null) throw Exception('Token tidak ditemukan');
-
-    final response = await http.delete(
-      Uri.parse('$baseUrl/documents/cancel/$documentId'),
-      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
-    );
-
-    final responseData = json.decode(response.body);
-
-    if (response.statusCode == 200) {
-      // Remove document_id from SharedPreferences on successful cancellation
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('document_id');
-
-      return {
-        'success': true,
-        'message': responseData['message'] ?? 'Document cancelled successfully',
-      };
-    } else {
-      return {
-        'success': false,
-        'message': responseData['message'] ?? 'Failed to cancel document',
-      };
-    }
-  } catch (e) {
-    return {'success': false, 'message': 'Network error: ${e.toString()}'};
-  }
-}
-
 Future<Map<String, dynamic>> uploadSigner({
   required int documentId,
   required String nip,

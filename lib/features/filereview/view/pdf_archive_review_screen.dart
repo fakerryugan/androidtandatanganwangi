@@ -4,8 +4,7 @@ import 'package:android/features/filereview/reponsitory/pdf_archive_review_repos
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-
-// Import BLoC dan Repository yang baru dibuat
+import 'package:share_plus/share_plus.dart';
 import '../bloc/pdf_archive_review_bloc.dart';
 
 class PdfArchiveReviewScreen extends StatelessWidget {
@@ -29,8 +28,30 @@ class PdfArchiveReviewScreen extends StatelessWidget {
           repository: context.read<PdfArchiveReviewRepository>(),
           accessToken: accessToken,
           encryptedName: encryptedName,
-        )..add(PdfArchiveReviewLoadRequested()), // Langsung panggil event load
-        child: Scaffold(appBar: _buildAppBar(context), body: _buildBody()),
+        )..add(PdfArchiveReviewLoadRequested()),
+        child: BlocListener<FilesBloc, FilesState>(
+          listener: (context, state) {
+            if (state is FileReadyForSharing) {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              // Panggil dialog share
+              Share.shareXFiles([
+                XFile(state.tempFilePath),
+              ], text: 'Membagikan dokumen: ${state.originalName}');
+            } else if (state is FileShareFailure) {
+              // Tampilkan error jika share gagal
+              ScaffoldMessenger.of(context)
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(
+                    content: Text(state.message),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+            }
+          },
+          // --- AKHIR TAMBAHAN ---
+          child: Scaffold(appBar: _buildAppBar(context), body: _buildBody()),
+        ),
       ),
     );
   }
@@ -49,33 +70,38 @@ class PdfArchiveReviewScreen extends StatelessWidget {
       backgroundColor: const Color.fromRGBO(127, 146, 248, 1),
       elevation: 1,
       actions: [
+        // --- PERUBAHAN: Ikon dan fungsi diubah ke Share ---
         IconButton(
-          icon: const Icon(Icons.download, color: Colors.white),
-          tooltip: 'Download File',
-          onPressed: () => _startDownload(context),
+          icon: const Icon(Icons.share, color: Colors.white), // Ikon diubah
+          tooltip: 'Bagikan File', // Tooltip diubah
+          onPressed: () => _startShare(context), // Fungsi diubah
         ),
+        // --- AKHIR PERUBAHAN ---
       ],
     );
   }
 
-  void _startDownload(BuildContext context) {
+  // --- PERUBAHAN: Nama fungsi dan logikanya diubah ---
+  void _startShare(BuildContext context) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text('Mulai mengunduh "$originalName"...'),
+          content: Text('Mempersiapkan "$originalName" untuk dibagikan...'),
           backgroundColor: Colors.blue,
         ),
       );
 
+    // Kirim event ShareFile (dari implementasi kita sebelumnya)
     context.read<FilesBloc>().add(
-      DownloadFile(
+      ShareFile(
         accessToken: accessToken,
         encryptedName: encryptedName,
         originalName: originalName,
       ),
     );
   }
+  // --- AKHIR PERUBAHAN ---
 
   Widget _buildBody() {
     return BlocBuilder<PdfArchiveReviewBloc, PdfArchiveReviewState>(

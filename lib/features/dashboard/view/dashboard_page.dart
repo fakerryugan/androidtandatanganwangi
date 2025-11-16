@@ -16,7 +16,6 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int myCurrentIndex = 0;
 
-  // Ganti List<Widget> menjadi function supaya dibuat saat build
   Widget getCurrentPage(int index) {
     switch (index) {
       case 0:
@@ -65,8 +64,6 @@ class _DashboardPageState extends State<DashboardPage> {
             setState(() {
               myCurrentIndex = index;
             });
-
-            // Panggil BLoC hanya setelah frame selesai dibangun
             if (index == 0) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 context.read<DashboardBloc>().add(LoadDashboardData());

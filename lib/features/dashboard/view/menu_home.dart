@@ -1,6 +1,7 @@
 import 'package:android/features/file/view/lihatsemuapage.dart';
 import 'package:android/features/file/view/arsipdokumen.dart';
 import 'package:android/features/scan/view/scanner_page.dart';
+import 'package:android/features/verification/view/file_pengajuan_main_page.dart';
 
 import 'package:android/features/verification/view/fileverifikasipage.dart';
 import 'package:android/upload_file/upload.dart';
@@ -20,11 +21,9 @@ class MenuHome extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        // 2. Error State
         if (state is DashboardError) {
           return Scaffold(body: Center(child: Text(state.message)));
         }
-        // 3. Loaded State
         if (state is DashboardLoaded) {
           return Scaffold(
             body: CustomScrollView(
@@ -134,6 +133,9 @@ class MenuHome extends StatelessWidget {
                                             ),
                                           );
                                         },
+                                        key: const Key(
+                                          'scan_qr_button',
+                                        ), // <-- TAMBAHKAN INI
                                       ),
                                     ),
                                     Expanded(
@@ -151,7 +153,7 @@ class MenuHome extends StatelessWidget {
                                     Expanded(
                                       child: buildButton(
                                         Icons.verified,
-                                        'File verified',
+                                        'Status File',
                                         () {
                                           Navigator.push(
                                             context,
@@ -166,16 +168,17 @@ class MenuHome extends StatelessWidget {
                                     Expanded(
                                       child: buildButton(
                                         Icons.mobile_friendly,
-                                        'Verifikasi TTD',
+                                        'Pengajuan',
                                         () {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(
                                               builder: (context) =>
-                                                  FileVerifikasiPage(),
+                                                  FileReviewMainPage(),
                                             ),
                                           );
                                         },
+                                        key: const Key('verifikasi_ttd_button'),
                                       ),
                                     ),
                                   ],
@@ -208,7 +211,6 @@ class MenuHome extends StatelessWidget {
                             ),
                           ),
                           GestureDetector(
-                            // Navigasi dihapus karena LihatSemuaPage belum diimpor/dibuat
                             onTap: () {
                               {
                                 Navigator.push(

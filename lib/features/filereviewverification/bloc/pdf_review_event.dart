@@ -1,4 +1,4 @@
-// lib/features/verifikasi/bloc/pdf_review_event.dart
+// lib/features/filereviewverification/bloc/pdf_review_event.dart
 part of 'pdf_review_bloc.dart';
 
 abstract class PdfReviewEvent extends Equatable {
@@ -8,15 +8,14 @@ abstract class PdfReviewEvent extends Equatable {
   List<Object> get props => [];
 }
 
-// Event untuk memulai proses load PDF dari API
 class PdfReviewLoadRequested extends PdfReviewEvent {}
 
-// Event untuk mengirimkan aksi (approve/reject)
 class PdfReviewSignatureSubmitted extends PdfReviewEvent {
-  final String status; // 'approved' or 'rejected'
+  final String status; // approved / rejected
+  final String? comment; // komentar opsional (wajib saat rejected)
 
-  const PdfReviewSignatureSubmitted({required this.status});
+  const PdfReviewSignatureSubmitted({required this.status, this.comment});
 
   @override
-  List<Object> get props => [status];
+  List<Object> get props => [status, comment ?? ''];
 }

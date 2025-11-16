@@ -1,5 +1,3 @@
-// lib/features/filereviewverification/bloc/pdf_review_bloc.dart
-
 import 'package:android/features/filereviewverification/respository/pdf_review_repository.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -31,8 +29,6 @@ class PdfReviewBloc extends Bloc<PdfReviewEvent, PdfReviewState> {
     emit(PdfReviewLoading());
     try {
       final pdfFile = await _repository.ReviewPdf(accessToken, documentId);
-      // --- PERBAIKAN DI SINI ---
-      // Menghapus tanda hubung (-) dari nama class State
       emit(PdfReviewLoadSuccess(pdfPath: pdfFile.path));
     } catch (e) {
       emit(
@@ -48,10 +44,12 @@ class PdfReviewBloc extends Bloc<PdfReviewEvent, PdfReviewState> {
     if (state is PdfReviewLoadSuccess) {
       final currentState = state as PdfReviewLoadSuccess;
       emit(currentState.copyWith(isSigning: true));
+
       try {
         final result = await _repository.processSignature(
           signToken,
           event.status,
+          comment: event.comment,
         );
         emit(PdfReviewActionSuccess(message: result['message']));
       } catch (e) {

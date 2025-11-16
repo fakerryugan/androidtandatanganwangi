@@ -69,6 +69,7 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                   const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () => Navigator.of(context).pop(),
+                    key: const Key('okkk'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFE53935),
                       shape: RoundedRectangleBorder(
@@ -116,17 +117,12 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
             if (state is LoginSuccess) {
               String? fcmToken = await FirebaseMessaging.instance.getToken();
               print("Token FCM user: $fcmToken");
-
-              // simpan token login ke local storage
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('token', state.user.token);
-
-              // update FCM token ke server
               await LoginRepository().updateFcmToken(
                 state.user.token,
                 fcmToken ?? "",
               );
-
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (_) => const DashboardPage()),
@@ -200,6 +196,7 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                           child: Column(
                             children: [
                               TextField(
+                                key: const Key('username_field'),
                                 controller: _usernameController,
                                 decoration: const InputDecoration(
                                   labelText: 'Username',
@@ -208,6 +205,7 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                               ),
                               SizedBox(height: size.height * 0.03),
                               TextField(
+                                key: const Key('password_field'),
                                 controller: _passwordController,
                                 obscureText: true,
                                 decoration: const InputDecoration(
@@ -218,7 +216,9 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
                               SizedBox(height: size.height * 0.03),
                               SizedBox(
                                 width: double.infinity,
+
                                 child: ElevatedButton(
+                                  key: const Key('login_button_masuk'),
                                   onPressed: isLoading
                                       ? null
                                       : () {

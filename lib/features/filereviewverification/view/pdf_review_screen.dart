@@ -1,4 +1,3 @@
-// lib/features/filereviewverification/view/pdf_review_screen.dart
 import 'package:android/features/filereviewverification/bloc/pdf_review_bloc.dart';
 import 'package:android/features/filereviewverification/respository/pdf_review_repository.dart';
 import 'package:flutter/material.dart';
@@ -27,14 +26,10 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // --- PERBAIKAN UTAMA DI SINI ---
-    // 1. Kita sediakan RepositoryProvider untuk membuat PdfReviewRepository tersedia.
-    // 2. BlocProvider sekarang ditempatkan di bawahnya agar bisa mengakses repository tersebut.
     return RepositoryProvider(
       create: (context) => PdfReviewRepository(),
       child: BlocProvider(
         create: (context) => PdfReviewBloc(
-          // 'context.read' sekarang akan berhasil menemukan PdfReviewRepository
           repository: context.read<PdfReviewRepository>(),
           accessToken: widget.accessToken,
           documentId: widget.documentId,
@@ -57,6 +52,7 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
       ),
       backgroundColor: const Color(0xFF172B4C),
       centerTitle: true,
+
       automaticallyImplyLeading: false,
     );
   }
@@ -73,8 +69,10 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
                 backgroundColor: Colors.green,
               ),
             );
-          Navigator.pop(context, true); // Pop dan kirim sinyal sukses
+
+          Navigator.pop(context, true);
         }
+
         if (state is PdfReviewActionFailure) {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
@@ -117,6 +115,7 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
               ),
               if (_currentPage != null && _totalPages != null)
                 _buildPageCounter(),
+
               if (state.isSigning)
                 Container(
                   color: Colors.black.withOpacity(0.5),
@@ -126,6 +125,7 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
                       children: [
                         CircularProgressIndicator(color: Colors.white),
                         SizedBox(height: 16),
+
                         Text(
                           'Memproses...',
                           style: TextStyle(color: Colors.white),
@@ -139,6 +139,24 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
         }
         return const Center(child: Text('State tidak diketahui'));
       },
+    );
+  }
+
+  Widget _buildPageCounter() {
+    return Positioned(
+      bottom: 16,
+      right: 16,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          'Halaman $_currentPage/$_totalPages',
+          style: const TextStyle(color: Colors.white),
+        ),
+      ),
     );
   }
 
@@ -165,16 +183,17 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
                     Colors.grey.shade300,
                     () => Navigator.pop(context),
                   ),
+
                   _buildActionButton(
                     Icons.close,
                     Colors.red,
-                    () => _confirmAction(context, 'Tolak Dokumen?', 'rejected'),
+                    () => _showRejectDialog(context),
                   ),
+
                   _buildActionButton(
                     Icons.verified,
                     Colors.green,
-                    () =>
-                        _confirmAction(context, 'Setujui Dokumen?', 'approved'),
+                    () => _confirmApprove(context),
                   ),
                 ],
               ),
@@ -199,32 +218,54 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
     );
   }
 
-  Widget _buildPageCounter() {
-    return Positioned(
-      bottom: 16,
-      right: 16,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.black54,
-          borderRadius: BorderRadius.circular(8),
+  void _showRejectDialog(BuildContext blocContext) {
+    String comment = '';
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Tolak Dokumen'),
+        content: TextField(
+          maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Alasan penolakan'),
+          onChanged: (value) => comment = value,
         ),
-        child: Text(
-          'Halaman $_currentPage/$_totalPages',
-          style: const TextStyle(color: Colors.white),
-        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (comment.trim().isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Komentar wajib diisi saat menolak'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(dialogContext);
+              blocContext.read<PdfReviewBloc>().add(
+                PdfReviewSignatureSubmitted(
+                  status: 'rejected',
+                  comment: comment,
+                ),
+              );
+            },
+            child: const Text('Kirim', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }
 
-  void _confirmAction(BuildContext blocContext, String title, String status) {
+  void _confirmApprove(BuildContext blocContext) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(title),
-        content: Text(
-          'Anda yakin ingin ${status == 'approved' ? 'menyetujui' : 'menolak'} dokumen ini?',
-        ),
+        title: const Text('Setujui Dokumen'),
+        content: const Text('Anda yakin ingin menyetujui dokumen ini?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
@@ -234,15 +275,10 @@ class _PdfReviewScreenState extends State<PdfReviewScreen> {
             onPressed: () {
               Navigator.pop(dialogContext);
               blocContext.read<PdfReviewBloc>().add(
-                PdfReviewSignatureSubmitted(status: status),
+                const PdfReviewSignatureSubmitted(status: 'approved'),
               );
             },
-            child: Text(
-              status == 'approved' ? 'Setujui' : 'Tolak',
-              style: TextStyle(
-                color: status == 'approved' ? Colors.green : Colors.red,
-              ),
-            ),
+            child: const Text('Setujui', style: TextStyle(color: Colors.green)),
           ),
         ],
       ),

@@ -3,33 +3,48 @@ part of 'files_bloc.dart';
 abstract class FilesEvent extends Equatable {
   const FilesEvent();
 
-  @override
   List<Object> get props => [];
 }
 
-class LoadAllFiles extends FilesEvent {}
+class LoadAllUserFiles extends FilesEvent {}
 
-class LoadCompletedFiles extends FilesEvent {}
+class LoadAllFiles extends FilesEvent {}
 
 class SearchFiles extends FilesEvent {
   final String query;
-  const SearchFiles(this.query); // Tambahkan const
+  const SearchFiles(this.query);
 
   @override
   List<Object> get props => [query];
 }
 
-class DownloadFile extends FilesEvent {
+class FilterFilesByStatus extends FilesEvent {
+  final String status;
+  const FilterFilesByStatus(this.status);
+
+  @override
+  List<Object> get props => [status];
+}
+
+class ShareFile extends FilesEvent {
   final String accessToken;
-  final String encryptedName; // <-- Ubah dari documentId
+  final String encryptedName;
   final String originalName;
 
-  const DownloadFile({
+  const ShareFile({
     required this.accessToken,
-    required this.encryptedName, // <-- Ubah dari documentId
+    required this.encryptedName,
     required this.originalName,
   });
 
   @override
   List<Object> get props => [accessToken, encryptedName, originalName];
+}
+
+// Ini adalah event yang benar yang dipanggil oleh ArsipDokumenPage.dart
+class CancelDocumentRequested extends FilesEvent {
+  final int documentId;
+  const CancelDocumentRequested(this.documentId);
+  @override
+  List<Object> get props => [documentId];
 }

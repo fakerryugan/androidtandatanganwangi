@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
-import 'package:path_provider/path_provider.dart'; // <-- THIS LINE FIXES BOTH ERRORS
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // --- Konfigurasi dan Helper Global ---
@@ -11,7 +11,7 @@ Future<String?> getToken() async {
   return prefs.getString('token');
 }
 
-// --- Abstraksi Service Layer (Tetap Sama) ---
+// --- Abstraksi Service Layer ---
 abstract class ApiService {
   Future<Map<String, dynamic>?> fetchUserInfo();
   Future<List<Map<String, dynamic>>> fetchUserDocuments();
@@ -38,14 +38,21 @@ abstract class ApiService {
     String signToken,
     String status,
   );
+  Future<String> downloadDocumentToCache(
+    String accessToken,
+    String encryptedName,
+    String originalName,
+  );
+
+  // --- BARU: Metode untuk mengambil dokumen penolakan ---
+  Future<List<Map<String, dynamic>>> fetchRejectionDocuments();
 }
 
-// --- Implementasi Service Layer yang Sudah Diperbaiki ---
+// --- Implementasi Service Layer ---
 class ApiServiceImpl implements ApiService {
   late final Dio _dio;
 
   ApiServiceImpl() {
-    // 1. Konfigurasi Dio terpusat di sini
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
@@ -54,7 +61,6 @@ class ApiServiceImpl implements ApiService {
       ),
     );
 
-    // 2. Interceptor untuk menambahkan Token & Header secara otomatis
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -69,7 +75,6 @@ class ApiServiceImpl implements ApiService {
     );
   }
 
-  // Helper untuk menangani error Dio secara konsisten
   Exception _handleDioError(DioException e) {
     final errorResponse = e.response?.data;
     final message = errorResponse?['message'] ?? 'Terjadi kesalahan jaringan.';
@@ -82,7 +87,6 @@ class ApiServiceImpl implements ApiService {
       final response = await _dio.get('/auth');
       return response.data as Map<String, dynamic>;
     } on DioException {
-      // Sesuai kontrak lama, return null jika gagal
       return null;
     }
   }
@@ -113,8 +117,6 @@ class ApiServiceImpl implements ApiService {
     String encryptedName,
     String originalName,
   ) async {
-    // --- PERBAIKAN LOKASI PENYIMPANAN ---
-    // Menggunakan direktori eksternal khusus aplikasi yang lebih aman.
     final Directory? appDir = await getExternalStorageDirectory();
 
     if (appDir == null) {
@@ -123,15 +125,10 @@ class ApiServiceImpl implements ApiService {
       );
     }
 
-    // Anda bisa membuat sub-folder jika perlu
     final downloadsPath = '${appDir.path}/Downloads';
-    await Directory(
-      downloadsPath,
-    ).create(recursive: true); // Buat folder jika belum ada
+    await Directory(downloadsPath).create(recursive: true);
 
     final savePath = '$downloadsPath/$originalName';
-    // --- AKHIR PERBAIKAN ---
-
     final url = '$baseUrl/documents/download/$accessToken/$encryptedName';
 
     try {
@@ -142,10 +139,29 @@ class ApiServiceImpl implements ApiService {
       );
       return File(savePath);
     } on DioException catch (e) {
-      final errorResponse = e.response?.data;
-      final message =
-          errorResponse?['message'] ?? 'Terjadi kesalahan jaringan.';
-      throw Exception(message);
+      throw _handleDioError(e);
+    }
+  }
+
+  @override
+  Future<String> downloadDocumentToCache(
+    String accessToken,
+    String encryptedName,
+    String originalName,
+  ) async {
+    final Directory tempDir = await getTemporaryDirectory();
+    final savePath = '${tempDir.path}/$originalName';
+    final url = '$baseUrl/documents/download/$accessToken/$encryptedName';
+
+    try {
+      await Dio().download(
+        url,
+        savePath,
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+      return savePath;
+    } on DioException catch (e) {
+      throw _handleDioError(e);
     }
   }
 
@@ -225,10 +241,9 @@ class ApiServiceImpl implements ApiService {
   @override
   Future<File> downloadReviewPdf(String accessToken, String documentId) async {
     try {
-      // Menggunakan POST sesuai kode lama, tapi header otomatis dari interceptor
       final response = await _dio.post(
         '/documents/review/$accessToken',
-        options: Options(responseType: ResponseType.bytes), // Minta data mentah
+        options: Options(responseType: ResponseType.bytes),
       );
 
       final dir = await getTemporaryDirectory();
@@ -252,10 +267,22 @@ class ApiServiceImpl implements ApiService {
       );
       return response.data;
     } on DioException catch (e) {
-      // Jika status code 409 (conflict/sudah diproses) dianggap bukan error
       if (e.response?.statusCode == 409) {
         return e.response?.data;
       }
+      throw _handleDioError(e);
+    }
+  }
+
+  // --- IMPLEMENTASI BARU ---
+  @override
+  Future<List<Map<String, dynamic>>> fetchRejectionDocuments() async {
+    try {
+      // Menggunakan rute baru dari file Laravel Anda
+      final response = await _dio.get('/signatures/cancellation-requests');
+      // Asumsi struktur data sama dengan fetch lain (kunci 'documents')
+      return List<Map<String, dynamic>>.from(response.data['documents'] ?? []);
+    } on DioException catch (e) {
       throw _handleDioError(e);
     }
   }

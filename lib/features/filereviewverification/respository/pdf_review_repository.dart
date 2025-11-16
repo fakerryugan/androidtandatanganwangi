@@ -1,9 +1,9 @@
-// lib/features/verifikasi/repository/pdf_review_repository.dart
+// lib/features/filereviewverification/respository/pdf_review_repository.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:android/api/token.dart'; // Pastikan path ini benar
+import 'package:android/api/token.dart';
 
 class PdfReviewRepository {
   Future<File> ReviewPdf(String accessToken, String documentId) async {
@@ -28,8 +28,9 @@ class PdfReviewRepository {
 
   Future<Map<String, dynamic>> processSignature(
     String signToken,
-    String status,
-  ) async {
+    String status, {
+    String? comment,
+  }) async {
     final token = await getToken();
     if (token == null) throw Exception("Token not found");
 
@@ -40,10 +41,11 @@ class PdfReviewRepository {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({'status': status}),
+      body: jsonEncode({'status': status, 'comment': comment}),
     );
 
     final responseData = jsonDecode(response.body);
+
     if (response.statusCode == 200 || response.statusCode == 409) {
       return responseData;
     } else {

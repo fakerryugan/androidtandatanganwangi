@@ -4,7 +4,10 @@ import 'dart:typed_data';
 import 'package:android/api/token.dart';
 
 import 'package:android/features/dashboard/view/dashboard_page.dart';
+import 'package:android/features/file/bloc/files_bloc.dart';
 import 'package:flutter/material.dart';
+// <-- PERBAIKAN: Tambahkan import Bloc -->
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf_lib;
@@ -13,7 +16,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:android/upload_file/generateqr.dart';
 import 'package:http_parser/http_parser.dart';
 
-// Kunci global untuk ScaffoldMessenger
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey();
 
 class PdfViewerPage extends StatefulWidget {
@@ -40,7 +42,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   List<GlobalKey> _pageKeys = [];
   List<TransformationController> _transformationControllers = [];
 
-  // State untuk menyimpan batasan area PDF di layar (pagar tak terlihat)
   Rect? _pdfPageBoundsOnScreen;
 
   final ValueNotifier<Map<String, dynamic>?> _activeQrNotifier = ValueNotifier(
@@ -78,7 +79,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
   @override
   void dispose() {
-    // Pastikan semua controller dibersihkan untuk menghindari memory leak
     for (var controller in _transformationControllers) {
       controller.removeListener(_updatePdfPageBounds);
       controller.dispose();
@@ -90,7 +90,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     super.dispose();
   }
 
-  /// Fungsi untuk menghitung dan memperbarui batasan "pagar" di sekitar PDF.
   void _updatePdfPageBounds() {
     if (_pageKeys.isEmpty || !_pageController.hasClients) return;
 
@@ -118,7 +117,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     }
   }
 
-  /// Memuat file PDF dan mengubah setiap halaman menjadi gambar.
   Future<void> _loadAndConvertPdf() async {
     setState(() => _isLoadingPdf = true);
     try {
@@ -129,7 +127,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       for (int i = 1; i <= document.pagesCount; i++) {
         final page = await document.getPage(i);
         final pageImage = await page.render(
-          width: page.width * 2, // Resolusi tinggi untuk kualitas zoom
+          width: page.width * 2,
           height: page.height * 2,
           format: PdfPageImageFormat.png,
         );
@@ -140,7 +138,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         await page.close();
       }
 
-      // Bersihkan listener lama sebelum membuat yang baru
       for (var controller in _transformationControllers) {
         controller.removeListener(_updatePdfPageBounds);
         controller.dispose();
@@ -155,7 +152,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           (_) => TransformationController(),
         );
 
-        // Tambahkan listener ke setiap controller untuk melacak zoom/pan
         for (var controller in _transformationControllers) {
           controller.addListener(_updatePdfPageBounds);
         }
@@ -163,7 +159,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         _isLoadingPdf = false;
       });
 
-      // Panggil sekali setelah build pertama selesai untuk set batasan awal
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _updatePdfPageBounds(),
       );
@@ -175,7 +170,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     }
   }
 
-  /// Logika utama untuk menyimpan QR code ke dalam file PDF.
   Future<void> _saveActiveQrToPdf() async {
     if (_activeQrNotifier.value == null || _isProcessing) return;
     setState(() => _isProcessing = true);
@@ -185,7 +179,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final qrToSave = _activeQrNotifier.value!;
       final int pageIndex = (qrToSave['selected_page'] as int) - 1;
 
-      // 1. Dapatkan RenderBox dari gambar PDF.
       final GlobalKey pageKey = _pageKeys[pageIndex];
       final RenderBox? pageRenderBox =
           pageKey.currentContext?.findRenderObject() as RenderBox?;
@@ -193,12 +186,10 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         throw Exception('Gagal mengukur area PDF. Coba lagi.');
       }
 
-      // 2. Dapatkan matriks transformasi (zoom/pan) dari controller.
       final TransformationController controller =
           _transformationControllers[pageIndex];
       final Matrix4 matrix = controller.value;
 
-      // 3. Dapatkan data posisi dan ukuran.
       final Size unscaledImageSize = pageRenderBox.size;
       final Offset imagePositionOnScreen = pageRenderBox.localToGlobal(
         Offset.zero,
@@ -207,7 +198,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final double qrSizeOnScreen = qrToSave['size'] as double;
       final String signToken = qrToSave['sign_token'] as String;
 
-      // 4. Konversi posisi QR di layar ke posisi relatif di gambar (sebelum di-zoom)
       final Matrix4 invertedMatrix = Matrix4.inverted(matrix);
       final Offset qrPositionRelativeToImageContainer =
           qrPositionOnScreen - imagePositionOnScreen;
@@ -216,11 +206,9 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         qrPositionRelativeToImageContainer,
       );
 
-      // 5. Hitung ukuran QR pada gambar yang belum di-zoom.
       final double currentScale = matrix.getMaxScaleOnAxis();
       final double qrSizeOnUnscaledImage = qrSizeOnScreen / currentScale;
 
-      // 6. Konversi koordinat gambar ke koordinat PDF asli (dalam points).
       final Size originalPdfPageSize = _pdfPageSizes[pageIndex];
       final double scaleFactor =
           originalPdfPageSize.width / unscaledImageSize.width;
@@ -267,7 +255,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       await File(tempPath).writeAsBytes(await document.save());
       document.dispose();
 
-      // Ganti file lama dengan file baru yang sudah ada QR
       await File(_currentPdfPath).delete();
       await File(tempPath).rename(_currentPdfPath);
 
@@ -277,7 +264,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         _isLoadingPdf = true;
       });
 
-      await _loadAndConvertPdf(); // Muat ulang PDF yang sudah diperbarui
+      await _loadAndConvertPdf();
 
       scaffold?.showSnackBar(
         const SnackBar(content: Text('QR berhasil disimpan!')),
@@ -294,87 +281,134 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     return Scaffold(
       key: scaffoldMessengerKey,
       appBar: _buildAppBar(),
-      body: _isLoadingPdf
-          ? const Center(child: CircularProgressIndicator())
-          : Stack(
-              children: [
-                PageView.builder(
-                  controller: _pageController,
-                  itemCount: _pageImages.length,
-                  itemBuilder: (context, index) {
-                    return InteractiveViewer(
-                      transformationController:
-                          _transformationControllers[index],
-                      minScale: 1.0,
-                      maxScale: 4.0,
-                      onInteractionEnd: (_) => _updatePdfPageBounds(),
-                      child: Container(
-                        key: _pageKeys[index],
-                        alignment: Alignment.center,
-                        child: Image.memory(_pageImages[index]),
-                      ),
-                    );
-                  },
-                  onPageChanged: (page) {
-                    if (_activeQrNotifier.value != null) {
-                      _activeQrNotifier.value = {
-                        ..._activeQrNotifier.value!,
-                        'selected_page': page + 1,
-                      };
-                    }
-                    WidgetsBinding.instance.addPostFrameCallback(
-                      (_) => _updatePdfPageBounds(),
-                    );
-                  },
-                ),
-
-                ValueListenableBuilder<Map<String, dynamic>?>(
-                  valueListenable: _activeQrNotifier,
-                  builder: (context, activeQr, child) {
-                    if (activeQr == null) return const SizedBox.shrink();
-
-                    // Kirimkan "pagar" ke widget QR code
-                    return ResizableQrCode(
-                      key: ValueKey('resizable_qr_${activeQr['sign_token']}'),
-                      boundaryRect:
-                          _pdfPageBoundsOnScreen, // <-- Kunci pembatasan
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width,
-                        maxHeight: MediaQuery.of(context).size.height,
-                      ),
-                      qrData: activeQr,
-                      onDragUpdate: (newPosition) {
-                        _activeQrNotifier.value = {
-                          ...activeQr,
-                          'position': newPosition,
-                        };
-                      },
-                      onResizeUpdate: (newSize) {
-                        _activeQrNotifier.value = {
-                          ...activeQr,
-                          'size': newSize,
-                        };
-                      },
-                      onDragEnd: () {
-                        final currentPage = _pageController.page?.round() ?? 0;
+      // <-- PERBAIKAN: Tambahkan BlocListener di sini -->
+      body: BlocListener<FilesBloc, FilesState>(
+        listener: (context, state) {
+          if (state is FileCancelSuccess) {
+            // Sukses (Kasus 1: Langsung diarsipkan)
+            setState(() => _isProcessing = false);
+            scaffoldMessengerKey.currentState?.showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.green,
+              ),
+            );
+            // Navigasi kembali ke dashboard
+            if (mounted) {
+              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const DashboardPage()),
+                (route) => false,
+              );
+            }
+          } else if (state is FileCancelRequestSent) {
+            // Sukses (Kasus 2: Permintaan terkirim)
+            setState(() => _isProcessing = false);
+            scaffoldMessengerKey.currentState?.showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.blue,
+              ),
+            );
+            // Navigasi kembali ke dashboard
+            if (mounted) {
+              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const DashboardPage()),
+                (route) => false,
+              );
+            }
+          } else if (state is FileCancelFailure) {
+            // Gagal
+            setState(() => _isProcessing = false);
+            scaffoldMessengerKey.currentState?.showSnackBar(
+              SnackBar(
+                content: Text(state.message),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+        // <-- PERBAIKAN: 'child' dari listener adalah body asli Anda -->
+        child: _isLoadingPdf
+            ? const Center(child: CircularProgressIndicator())
+            : Stack(
+                children: [
+                  PageView.builder(
+                    controller: _pageController,
+                    itemCount: _pageImages.length,
+                    itemBuilder: (context, index) {
+                      return InteractiveViewer(
+                        transformationController:
+                            _transformationControllers[index],
+                        minScale: 1.0,
+                        maxScale: 4.0,
+                        onInteractionEnd: (_) => _updatePdfPageBounds(),
+                        child: Container(
+                          key: _pageKeys[index],
+                          alignment: Alignment.center,
+                          child: Image.memory(_pageImages[index]),
+                        ),
+                      );
+                    },
+                    onPageChanged: (page) {
+                      if (_activeQrNotifier.value != null) {
                         _activeQrNotifier.value = {
                           ..._activeQrNotifier.value!,
-                          'selected_page': currentPage + 1,
+                          'selected_page': page + 1,
                         };
-                      },
-                    );
-                  },
-                ),
-
-                if (_isProcessing || _isSending)
-                  Container(
-                    color: Colors.black.withOpacity(0.5),
-                    child: const Center(child: CircularProgressIndicator()),
+                      }
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _updatePdfPageBounds(),
+                      );
+                    },
                   ),
 
-                _buildBottomNavigation(),
-              ],
-            ),
+                  ValueListenableBuilder<Map<String, dynamic>?>(
+                    valueListenable: _activeQrNotifier,
+                    builder: (context, activeQr, child) {
+                      if (activeQr == null) return const SizedBox.shrink();
+
+                      return ResizableQrCode(
+                        key: ValueKey('resizable_qr_${activeQr['sign_token']}'),
+                        boundaryRect: _pdfPageBoundsOnScreen,
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width,
+                          maxHeight: MediaQuery.of(context).size.height,
+                        ),
+                        qrData: activeQr,
+                        onDragUpdate: (newPosition) {
+                          _activeQrNotifier.value = {
+                            ...activeQr,
+                            'position': newPosition,
+                          };
+                        },
+                        onResizeUpdate: (newSize) {
+                          _activeQrNotifier.value = {
+                            ...activeQr,
+                            'size': newSize,
+                          };
+                        },
+                        onDragEnd: () {
+                          final currentPage =
+                              _pageController.page?.round() ?? 0;
+                          _activeQrNotifier.value = {
+                            ..._activeQrNotifier.value!,
+                            'selected_page': currentPage + 1,
+                          };
+                        },
+                      );
+                    },
+                  ),
+
+                  if (_isProcessing || _isSending)
+                    Container(
+                      color: Colors.black.withOpacity(0.5),
+                      child: const Center(child: CircularProgressIndicator()),
+                    ),
+
+                  _buildBottomNavigation(),
+                ],
+              ),
+      ),
       floatingActionButton: ValueListenableBuilder<Map<String, dynamic>?>(
         valueListenable: _activeQrNotifier,
         builder: (context, activeQr, _) {
@@ -413,7 +447,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     );
   }
 
-  // --- Widget dan Fungsi Bantuan (Tidak ada perubahan signifikan) ---
   final TextEditingController nipController = TextEditingController();
   final TextEditingController tujuanController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -476,8 +509,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           ),
   );
 
-  // GANTI FUNGSI INI DI DALAM CLASS _PdfViewerPageState
-
   void _addNewQrCode() async {
     if (_activeQrNotifier.value != null) {
       scaffoldMessengerKey.currentState?.showSnackBar(
@@ -501,22 +532,17 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     if (result != null && result['sign_token'] != null) {
       Offset initialPosition;
 
-      // ✨ PERBAIKAN UTAMA: Hitung posisi tengah dari area PDF yang terlihat
       if (_pdfPageBoundsOnScreen != null) {
         final boundary = _pdfPageBoundsOnScreen!;
 
-        // 1. Temukan titik tengah dari "pagar" PDF yang terlihat di layar
         final double centerX = boundary.left + (boundary.width / 2);
         final double centerY = boundary.top + (boundary.height / 2);
 
-        // 2. Tempatkan QR code di tengah area tersebut
         initialPosition = Offset(
           centerX - (_initialQrSize / 2),
           centerY - (_initialQrSize / 2),
         );
 
-        // 3. (Pengaman) Pastikan posisi yang dihitung tidak keluar batas.
-        //    Ini penting jika ukuran QR lebih besar dari area PDF yang terlihat.
         final double clampedDx = initialPosition.dx.clamp(
           boundary.left,
           boundary.right - _initialQrSize,
@@ -527,7 +553,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         );
         initialPosition = Offset(clampedDx, clampedDy);
       } else {
-        // Fallback jika area PDF belum terdeteksi: tempatkan di tengah layar
         final viewSize = MediaQuery.of(context).size;
         initialPosition = Offset(
           viewSize.width / 2 - _initialQrSize / 2,
@@ -535,17 +560,14 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         );
       }
 
-      // Set state dengan posisi yang sudah dijamin pas
       _activeQrNotifier.value = {
         'sign_token': result['sign_token'],
         'selected_page': result['selected_page'],
-        'position':
-            initialPosition, // <-- Menggunakan posisi yang sudah dihitung
+        'position': initialPosition,
         'size': _initialQrSize,
         'locked': false,
       };
 
-      // Pindahkan ke halaman yang dipilih
       final targetPage = (result['selected_page'] as int) - 1;
       if (targetPage >= 0 && targetPage < totalPages) {
         if (_pageController.page?.round() != targetPage) {
@@ -632,9 +654,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         TextButton(
           onPressed: _isProcessing
               ? null
-              : () async {
+              : () {
+                  // <-- PERBAIKAN: Pop dialog DULU -->
                   Navigator.of(context).pop();
-                  await _cancelDocumentRequest();
+                  // <-- PERBAIKAN: Panggil fungsi baru -->
+                  _cancelDocumentRequest();
                 },
           child: _isProcessing
               ? const SizedBox(
@@ -648,39 +672,34 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     ),
   );
 
+  // <-- PERBAIKAN: Fungsi ini diubah total untuk menggunakan BLoC -->
   Future<void> _cancelDocumentRequest() async {
+    // 1. Set status processing untuk menonaktifkan tombol
+    setState(() => _isProcessing = true);
+
+    // 2. Kirim Event ke FilesBloc
+    // Pastikan FilesBloc telah disediakan (provided) di atas widget ini
+    // (misalnya saat Anda mem-push halaman ini)
     try {
-      setState(() => _isProcessing = true);
-      final response = await cancelDocument(widget.documentId);
-      if (response['success'] == true) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('document_id');
-        scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(content: Text(response['message'] ?? 'Dokumen dibatalkan')),
-        );
-        if (mounted)
-          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const DashboardPage()),
-            (route) => false,
-          );
-      } else {
-        scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(content: Text(response['message'] ?? 'Gagal membatalkan')),
-        );
-      }
+      context.read<FilesBloc>().add(CancelDocumentRequested(widget.documentId));
+
+      // 3. Jangan lakukan apa-apa lagi di sini.
+      // BlocListener yang akan menangani respons (success/failure),
+      // menampilkan SnackBar, mengubah _isProcessing, dan navigasi.
     } catch (e) {
+      // Jika BLoC tidak ditemukan (error 'Provider not found')
+      setState(() => _isProcessing = false);
       scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
+        SnackBar(
+          content: Text('Error BLoC: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
       );
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
     }
   }
-}
 
-// =========================================================================
-// WIDGET PEMBANTU: ResizableQrCode (Sebelumnya di resize.dart)
-// =========================================================================
+  // <-- AKHIR PERBAIKAN -->
+}
 
 class ResizableQrCode extends StatefulWidget {
   final Map<String, dynamic> qrData;
@@ -688,7 +707,7 @@ class ResizableQrCode extends StatefulWidget {
   final ValueChanged<Offset> onDragUpdate;
   final ValueChanged<double> onResizeUpdate;
   final VoidCallback onDragEnd;
-  final Rect? boundaryRect; // Parameter untuk menerima area batasan
+  final Rect? boundaryRect;
 
   const ResizableQrCode({
     super.key,
@@ -715,21 +734,17 @@ class _ResizableQrCodeState extends State<ResizableQrCode> {
     _position = widget.qrData['position'] as Offset;
   }
 
-  /// Menangani pergerakan (drag) QR code dan membatasinya di dalam "pagar".
   void _onPanUpdate(DragUpdateDetails details) {
     Offset newPosition = _position + details.delta;
 
-    // Jika ada batasan (boundaryRect), patuhi!
     if (widget.boundaryRect != null) {
       final boundary = widget.boundaryRect!;
 
-      // Batasi posisi X agar tidak keluar dari sisi kiri dan kanan
       final double clampedDx = newPosition.dx.clamp(
         boundary.left,
         boundary.right - _size,
       );
 
-      // Batasi posisi Y agar tidak keluar dari sisi atas dan bawah
       final double clampedDy = newPosition.dy.clamp(
         boundary.top,
         boundary.bottom - _size,
@@ -768,7 +783,6 @@ class _ResizableQrCodeState extends State<ResizableQrCode> {
                 size: _size,
               ),
             ),
-            // Handle untuk resize
             Positioned(
               right: -10,
               bottom: -10,
@@ -777,7 +791,7 @@ class _ResizableQrCodeState extends State<ResizableQrCode> {
                   setState(() {
                     final newSize =
                         _size + (details.delta.dx + details.delta.dy) / 2;
-                    _size = newSize.clamp(50.0, 300.0); // Batasi ukuran
+                    _size = newSize.clamp(50.0, 300.0);
                   });
                   widget.onResizeUpdate(_size);
                 },

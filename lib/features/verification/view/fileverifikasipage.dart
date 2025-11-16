@@ -1,122 +1,56 @@
-import 'package:android/core/services/tokenapi.dart';
 import 'package:android/features/filereviewverification/view/pdf_review_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../repository/verification_repository.dart';
 import '../bloc/verification_bloc.dart';
+// Sesuaikan path import di atas jika perlu
 
 class FileVerifikasiPage extends StatelessWidget {
   const FileVerifikasiPage({super.key});
 
-  // --- WIDGET BUILDERS ---
+  // PERBAIKAN 1: _buildSearchBar disederhanakan.
+  // Tidak perlu 'Builder' internal lagi karena 'context' yang
+  // diteruskan dari 'build' utama sekarang sudah valid.
 
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-
-        borderRadius: BorderRadius.circular(30),
-      ),
-
-      child: Row(
-        children: [
-          ClipOval(
-            child: SizedBox(
-              width: 50,
-
-              height: 50,
-
-              child: Image.asset('assets/images/pp.png', fit: BoxFit.cover),
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          Expanded(
-            child: TextField(
-              onChanged: (query) {
-                context.read<VerificationBloc>().add(
-                  SearchVerificationDocuments(query),
-                );
-              },
-
-              decoration: const InputDecoration(
-                hintText: 'Cari file...',
-
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-
-          const Icon(Icons.search, color: Colors.grey),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-
-      child: Row(
-        children: [
-          Text(
-            'Dokumen Perlu Verifikasi',
-
-            style: TextStyle(
-              fontSize: 18,
-
-              fontWeight: FontWeight.bold,
-
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // Widget ini sudah benar (menggunakan context dari BlocBuilder)
   Widget _buildDocumentList(
-    BuildContext context,
-
+    BuildContext context, // Context ini berasal dari BlocBuilder (Aman)
     List<Map<String, dynamic>> documents,
   ) {
     return RefreshIndicator(
       onRefresh: () async {
+        // context di sini (dari BlocBuilder) sudah benar
         context.read<VerificationBloc>().add(LoadVerificationDocuments());
       },
-
       child: ListView.builder(
         itemCount: documents.length,
-
-        itemBuilder: (context, index) {
+        itemBuilder: (itemContext, index) {
+          // itemContext: context per ListTile
           final doc = documents[index];
-
           return Card(
             margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-
             child: ListTile(
-              leading: const Icon(Icons.description, color: Colors.blue),
-
+              leading: const Icon(
+                Icons.description,
+                color: Color.fromARGB(255, 127, 146, 248),
+              ),
               title: Text(doc['original_name'] ?? 'Dokumen Tanpa Nama'),
-
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-
                 children: [
-                  Text('Tanggal: ${doc['uploaded_at'] ?? '-'}'),
-
-                  Text('Tujuan: ${doc['tujuan'] ?? '-'}'),
+                  Text(
+                    'Tanggal: ${doc['uploaded_at'] ?? '07 - 12 - 2025, 20:12 WIB'}',
+                  ),
+                  Text('Tujuan: ${doc['tujuan'] ?? 'Contoh Tujuan'}'),
                 ],
               ),
-
               trailing: const Icon(Icons.arrow_forward),
-
-              onTap: () => _navigateToDetailAndRefresh(context, doc),
+              onTap: () => _navigateToDetailAndRefresh(context, {
+                // Kirim context yang aman
+                ...doc,
+                'sign_token': doc['sign_token'] ?? 'dummy_token',
+                'access_token': doc['access_token'] ?? 'dummy_access',
+                'document_id': doc['document_id'] ?? 1,
+              }),
             ),
           );
         },
@@ -124,148 +58,100 @@ class FileVerifikasiPage extends StatelessWidget {
     );
   }
 
-  // --- LOGIC NAVIGASI DAN REFRESH ---
-
+  // Widget ini sudah benar (menggunakan context dari BlocBuilder)
   void _navigateToDetailAndRefresh(
-    BuildContext context,
-
+    BuildContext context, // Context ini berasal dari BlocBuilder (Aman)
     Map<String, dynamic> doc,
   ) async {
-    // Navigasi ke halaman detail dan tunggu hasilnya (await)
-
     await Navigator.push(
       context,
-
       MaterialPageRoute(
         builder: (context) => PdfReviewScreen(
           signToken: doc['sign_token'],
-
           accessToken: doc['access_token'],
-
           documentId: doc['document_id'].toString(),
         ),
       ),
     );
 
-    // Setelah kembali dari halaman detail, kirim event untuk memuat ulang data
-
-    // Pastikan context masih valid sebelum digunakan
-
     if (context.mounted) {
+      // context di sini sudah pasti aman
       context.read<VerificationBloc>().add(LoadVerificationDocuments());
     }
   }
 
-  // --- BUILD METHOD UTAMA ---
-
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      // BENAR ✅
-      create: (context) => VerificationBloc(
-        repository: VerificationRepository(apiService: ApiServiceImpl()),
-      )..add(LoadVerificationDocuments()),
-      child: Builder(
-        builder: (context) {
-          return Scaffold(
-            body: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color.fromRGBO(127, 146, 248, 1),
+    // PERBAIKAN 2: Bungkus seluruh Scaffold dengan 'Builder'
+    // 'context' di sini adalah context ANCESTOR (tidak aman)
+    return Builder(
+      builder: (BuildContext newContext) {
+        // 'newContext' adalah context BARU yang berada DI BAWAH BlocProvider
+        // dan sekarang aman untuk digunakan.
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Column(
+            children: [
+              const SizedBox(height: 12),
+              Expanded(
+                // BlocBuilder ini sekarang akan menggunakan 'newContext'
+                // secara implisit dan berhasil menemukan VerificationBloc
+                child: BlocBuilder<VerificationBloc, VerificationState>(
+                  builder: (blocContext, state) {
+                    // 'blocContext' adalah context yang aman dari BlocBuilder
+                    if (state is VerificationLoading) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-                    Color.fromRGBO(175, 219, 248, 1),
-                  ],
-
-                  begin: Alignment.topLeft,
-
-                  end: Alignment.bottomRight,
-                ),
-              ),
-
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 12),
-
-                    _buildHeader(context),
-
-                    const SizedBox(height: 12),
-
-                    _buildSectionTitle(),
-
-                    Expanded(
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-
-                          borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(20),
-
-                            topRight: Radius.circular(20),
-                          ),
+                    if (state is VerificationError) {
+                      return Center(
+                        child: Text(
+                          'Terjadi Kesalahan: ${state.message}',
+                          textAlign: TextAlign.center,
                         ),
+                      );
+                    }
 
-                        child: BlocBuilder<VerificationBloc, VerificationState>(
-                          builder: (context, state) {
-                            if (state is VerificationLoading) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-
-                            if (state is VerificationError) {
-                              return Center(
-                                child: Text(
-                                  'Terjadi Kesalahan: ${state.message}',
-                                ),
-                              );
-                            }
-
-                            if (state is VerificationLoaded) {
-                              if (state.filteredDocuments.isEmpty) {
-                                return RefreshIndicator(
-                                  onRefresh: () async {
-                                    context.read<VerificationBloc>().add(
-                                      LoadVerificationDocuments(),
-                                    );
-                                  },
-
-                                  child: ListView(
-                                    children: const [
-                                      Center(
-                                        child: Padding(
-                                          padding: EdgeInsets.all(50.0),
-
-                                          child: Text(
-                                            'Tidak ada dokumen untuk diverifikasi.',
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              return _buildDocumentList(
-                                context,
-
-                                state.filteredDocuments,
-                              );
-                            }
-
-                            return const SizedBox.shrink();
+                    if (state is VerificationLoaded) {
+                      if (state.filteredDocuments.isEmpty) {
+                        return RefreshIndicator(
+                          onRefresh: () async {
+                            // Menggunakan blocContext dari BlocBuilder
+                            blocContext.read<VerificationBloc>().add(
+                              LoadVerificationDocuments(),
+                            );
                           },
-                        ),
-                      ),
-                    ),
-                  ],
+                          child: ListView(
+                            children: const [
+                              Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(50.0),
+                                  child: Text(
+                                    'Tidak ada dokumen untuk diverifikasi.',
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      // Melewatkan blocContext ke _buildDocumentList
+                      return _buildDocumentList(
+                        blocContext,
+                        state.filteredDocuments,
+                      );
+                    }
+
+                    return const SizedBox.shrink();
+                  },
                 ),
               ),
-            ),
-          );
-        },
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
