@@ -1,15 +1,52 @@
-import 'package:android/features/filereview/view/pdf_archive_review_screen.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
+// --- SESUAIKAN IMPORT INI DENGAN STRUKTUR FOLDER ANDA ---
+import 'package:android/features/filereview/view/pdf_archive_review_screen.dart';
 import '../../../core/services/tokenapi.dart';
 import '../repository/files_repository.dart';
 import '../bloc/files_bloc.dart';
 
-class ArsipDokumenPage extends StatelessWidget {
+class ArsipDokumenPage extends StatefulWidget {
   const ArsipDokumenPage({super.key});
+
+  @override
+  State<ArsipDokumenPage> createState() => _ArsipDokumenPageState();
+}
+
+class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
+  // Controller untuk search agar teks tidak hilang saat rebuild
+  late TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // --- HELPER FUNCTION: Mencegah UI Rebuild saat Share/Loading ---
+  bool _shouldRebuild(FilesState previous, FilesState current) {
+    // Jika state adalah proses background (Share/Cancel/Loading Dialog),
+    // Jangan rebuild List/Filter agar tampilan tidak blank.
+    if (current is FileReadyForSharing ||
+        current is FileShareFailure ||
+        current is FileCancelRequestSent ||
+        current is FileCancelSuccess ||
+        current is FileCancelFailure) {
+      return false; // Pertahankan tampilan sebelumnya
+    }
+    return true; // Rebuild normal untuk Loading data, Loaded, atau Error Fetch
+  }
 
   String formatDate(String? dateStr) {
     if (dateStr == null) return 'N/A';
@@ -20,6 +57,8 @@ class ArsipDokumenPage extends StatelessWidget {
       return dateStr;
     }
   }
+
+  // --- ACTIONS ---
 
   void _shareFile(BuildContext context, Map<String, dynamic> file) {
     final accessToken = file['access_token'] as String?;
@@ -40,6 +79,7 @@ class ArsipDokumenPage extends StatelessWidget {
       SnackBar(
         content: Text('Mempersiapkan "$originalName" untuk dibagikan...'),
         backgroundColor: Colors.blue,
+        duration: const Duration(seconds: 1),
       ),
     );
 
@@ -82,63 +122,112 @@ class ArsipDokumenPage extends StatelessWidget {
     );
   }
 
+  // --- DIALOGS ---
+
   void _showCancelConfirmationDialog(
     BuildContext pageContext,
     BuildContext bottomSheetContext,
     Map<String, dynamic> file,
   ) {
-    Navigator.of(bottomSheetContext).pop();
+    Navigator.of(bottomSheetContext).pop(); // Tutup Bottom Sheet
 
-    showDialog(
+    // Logic Hapus vs Batalkan
+    final String status = file['status'] ?? '';
+    final bool isRejected = status == 'Ditolak';
+
+    final String dialogTitle = isRejected
+        ? 'Hapus Dokumen?'
+        : 'Batalkan Dokumen?';
+
+    final String dialogBody = isRejected
+        ? 'Apakah Anda yakin ingin menghapus permanen "${file['original_name']}"?\n\n'
+              'Dokumen yang ditolak dan dihapus tidak dapat dikembalikan.'
+        : 'Apakah Anda yakin ingin membatalkan "${file['original_name']}"?\n\n'
+              'Jika belum ada yang menyetujui, dokumen akan diarsipkan. '
+              'Jika sudah ada, permintaan pembatalan akan dikirim.';
+
+    final String confirmButtonLabel = isRejected ? 'HAPUS' : 'YA, BATALKAN';
+
+    showGeneralDialog(
       context: pageContext,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Batalkan Dokumen?'),
-          content: Text(
-            'Apakah Anda yakin ingin membatalkan "${file['original_name']}"?\n\n'
-            'Jika belum ada yang menyetujui, dokumen akan diarsipkan. '
-            'Jika sudah ada, permintaan pembatalan akan dikirim.',
+      barrierDismissible: true,
+      barrierLabel: dialogTitle,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 250),
+      transitionBuilder: (context, a1, a2, child) {
+        return Transform.scale(
+          scale: a1.value,
+          child: Opacity(opacity: a1.value, child: child),
+        );
+      },
+      pageBuilder: (BuildContext dialogContext, animation, secondaryAnimation) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20.0),
           ),
-          actions: [
-            TextButton(
-              child: const Text('Tutup'),
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-            TextButton(
-              child: const Text(
-                'Batalkan',
-                style: TextStyle(color: Colors.red),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 500),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    dialogTitle,
+                    style: Theme.of(dialogContext).textTheme.titleLarge
+                        ?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isRejected ? Colors.red : Colors.black87,
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    dialogBody,
+                    style: Theme.of(dialogContext).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.grey.shade700,
+                        ),
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        child: const Text('TUTUP'),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+
+                          final int? documentId = file['id'] as int?;
+                          if (documentId != null) {
+                            pageContext.read<FilesBloc>().add(
+                              CancelDocumentRequested(documentId),
+                            );
+                          }
+                        },
+                        child: Text(confirmButtonLabel),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-
-                final int? documentId = file['id'] as int?;
-                if (documentId != null) {
-                  pageContext.read<FilesBloc>().add(
-                    CancelDocumentRequested(documentId),
-                  );
-
-                  ScaffoldMessenger.of(pageContext).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Permintaan pembatalan untuk "${file['original_name']}" dikirim...',
-                      ),
-                      backgroundColor: Colors.blue,
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(pageContext).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Gagalan membatalkan: ID Dokumen tidak ditemukan.',
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              },
             ),
-          ],
+          ),
         );
       },
     );
@@ -166,7 +255,6 @@ class ArsipDokumenPage extends StatelessWidget {
   void _showActionMenu(BuildContext pageContext, Map<String, dynamic> file) {
     final String status = file['status'] ?? 'Pending';
     final bool canShare = (status == 'Diverifikasi' || status == 'Disetujui');
-
     final bool canCancel = (status != 'Diverifikasi' && status != 'Disetujui');
 
     showModalBottomSheet(
@@ -176,6 +264,7 @@ class ArsipDokumenPage extends StatelessWidget {
       ),
       builder: (BuildContext bottomSheetContext) {
         return _ActionMenuSheet(
+          file: file,
           canShare: canShare,
           canCancel: canCancel,
           onReview: () {
@@ -186,7 +275,6 @@ class ArsipDokumenPage extends StatelessWidget {
             Navigator.of(bottomSheetContext).pop();
             _shareFile(pageContext, file);
           },
-
           onCancel: () {
             _showCancelConfirmationDialog(
               pageContext,
@@ -199,6 +287,46 @@ class ArsipDokumenPage extends StatelessWidget {
     );
   }
 
+  Widget _buildEmptyState(BuildContext context, FilesLoaded state) {
+    final bool hasQuery = state.currentQuery.isNotEmpty;
+    final bool hasFilter = state.selectedStatus != 'Semua';
+    String emptyMessage = 'Anda belum ada dokumen apapun';
+    if (hasQuery || hasFilter) {
+      emptyMessage =
+          'Tidak ada dokumen yang cocok dengan filter atau pencarian Anda.';
+    }
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        context.read<FilesBloc>().add(LoadAllFiles());
+      },
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.2),
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.folder_off_outlined,
+                  size: 64,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  emptyMessage,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
@@ -207,43 +335,29 @@ class ArsipDokumenPage extends StatelessWidget {
             ..add(LoadAllFiles()),
       child: BlocListener<FilesBloc, FilesState>(
         listener: (context, state) {
-          if (state is FileReadyForSharing) {
+          if (state is FileCancelRequestSent) {
+            _showStatusDialog(
+              context,
+              'Permintaan pembatalan untuk "${state.fileName ?? 'Dokumen'}" dikirim...',
+              StatusType.loading,
+            );
+          } else if (state is FileCancelSuccess) {
+            // Tutup Loading Dialog
+            Navigator.of(context, rootNavigator: true).pop();
+            _showStatusDialog(context, state.message, StatusType.success);
+            // Refresh data otomatis
+            context.read<FilesBloc>().add(LoadAllFiles());
+          } else if (state is FileCancelFailure) {
+            // Tutup Loading Dialog
+            Navigator.of(context, rootNavigator: true).pop();
+            _showStatusDialog(context, state.message, StatusType.failure);
+          } else if (state is FileReadyForSharing) {
             ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            // Trigger Native Share
             Share.shareXFiles([
               XFile(state.tempFilePath),
             ], text: 'Membagikan dokumen: ${state.originalName}');
           } else if (state is FileShareFailure) {
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(
-                SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: Colors.red,
-                ),
-              );
-          } else if (state is FileCancelSuccess) {
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(
-                SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: Colors.green,
-                ),
-              );
-
-            context.read<FilesBloc>().add(LoadAllFiles());
-          } else if (state is FileCancelRequestSent) {
-            ScaffoldMessenger.of(context)
-              ..hideCurrentSnackBar()
-              ..showSnackBar(
-                SnackBar(
-                  content: Text(state.message),
-                  backgroundColor: Colors.blue,
-                ),
-              );
-
-            context.read<FilesBloc>().add(LoadAllFiles());
-          } else if (state is FileCancelFailure) {
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
               ..showSnackBar(
@@ -270,10 +384,12 @@ class ArsipDokumenPage extends StatelessWidget {
               child: Column(
                 children: [
                   const SizedBox(height: 12),
+
+                  // --- SEARCH BAR (TANPA TIMER AGAR LEBIH RESPONSIF) ---
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
-                      vertical: 8,
+                      vertical: 4,
                     ),
                     margin: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
@@ -284,7 +400,10 @@ class ArsipDokumenPage extends StatelessWidget {
                       children: [
                         Expanded(
                           child: TextField(
+                            controller: _searchController,
+                            // MENGHAPUS TIMER: Langsung kirim event saat mengetik
                             onChanged: (query) {
+                              print("Ketik: $query"); // Debug Print
                               context.read<FilesBloc>().add(SearchFiles(query));
                             },
                             decoration: const InputDecoration(
@@ -296,16 +415,40 @@ class ArsipDokumenPage extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const Icon(Icons.search, color: Colors.black),
+                        // Tombol Clear
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _searchController,
+                          builder: (context, value, child) {
+                            if (value.text.isEmpty) {
+                              return const Padding(
+                                padding: EdgeInsets.only(right: 8.0),
+                                child: Icon(
+                                  Icons.search,
+                                  color: Colors.black54,
+                                ),
+                              );
+                            }
+                            return IconButton(
+                              icon: const Icon(Icons.close, color: Colors.grey),
+                              onPressed: () {
+                                _searchController.clear();
+                                // Reset search di Bloc
+                                context.read<FilesBloc>().add(
+                                  const SearchFiles(''),
+                                );
+                              },
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 12),
+
+                  // --- FILTER CHIPS ---
                   BlocBuilder<FilesBloc, FilesState>(
-                    buildWhen: (prev, curr) =>
-                        prev is! FilesLoaded ||
-                        (curr is FilesLoaded &&
-                            prev.selectedStatus != curr.selectedStatus),
+                    // PENTING: buildWhen mencegah UI hilang saat Share
+                    buildWhen: _shouldRebuild,
                     builder: (context, state) {
                       final selectedStatus = (state is FilesLoaded)
                           ? state.selectedStatus
@@ -342,10 +485,11 @@ class ArsipDokumenPage extends StatelessWidget {
                                   244,
                                 ),
                                 backgroundColor: Colors.white.withOpacity(0.4),
+                                side: BorderSide.none,
                                 labelStyle: TextStyle(
                                   color: isSelected
-                                      ? const Color.fromARGB(255, 255, 255, 255)
-                                      : const Color.fromARGB(255, 0, 0, 0),
+                                      ? Colors.white
+                                      : Colors.black,
                                   fontWeight: isSelected
                                       ? FontWeight.bold
                                       : null,
@@ -358,6 +502,7 @@ class ArsipDokumenPage extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 12),
+
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
@@ -374,6 +519,8 @@ class ArsipDokumenPage extends StatelessWidget {
                       ],
                     ),
                   ),
+
+                  // --- LIST DOCUMENT ---
                   Expanded(
                     child: Container(
                       decoration: const BoxDecoration(
@@ -385,6 +532,8 @@ class ArsipDokumenPage extends StatelessWidget {
                       ),
                       width: double.infinity,
                       child: BlocBuilder<FilesBloc, FilesState>(
+                        // PENTING: buildWhen mencegah UI hilang saat Share
+                        buildWhen: _shouldRebuild,
                         builder: (context, state) {
                           if (state is FilesLoading) {
                             return const Center(
@@ -392,156 +541,85 @@ class ArsipDokumenPage extends StatelessWidget {
                             );
                           }
                           if (state is FilesError) {
-                            return Center(child: Text(state.message));
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Text(
+                                  state.message,
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            );
                           }
                           if (state is FilesLoaded) {
-                            if (state.filteredDocuments.isEmpty) {
-                              final bool hasQuery =
-                                  state.currentQuery.isNotEmpty;
-                              final bool hasFilter =
-                                  state.selectedStatus != 'Semua';
-                              String emptyMessage =
-                                  'Anda belum ada dokumen apapun';
-                              if (hasQuery || hasFilter) {
-                                emptyMessage =
-                                    'Tidak ada dokumen yang cocok dengan filter atau pencarian Anda.';
-                              }
-                              return RefreshIndicator(
-                                onRefresh: () async {
-                                  context.read<FilesBloc>().add(LoadAllFiles());
-                                },
-                                child: ListView(
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  children: [
-                                    Padding(
-                                      padding: const EdgeInsets.all(50.0),
-                                      child: Center(child: Text(emptyMessage)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                            return RefreshIndicator(
-                              onRefresh: () async {
-                                context.read<FilesBloc>().add(LoadAllFiles());
-                              },
-                              child: ListView.builder(
-                                itemCount: state.filteredDocuments.length,
-                                itemBuilder: (context, index) {
-                                  final file = state.filteredDocuments[index];
-                                  final String status =
-                                      file['status'] ?? 'Pending';
-                                  final String originalName =
-                                      file['original_name'] ??
-                                      'Nama tidak tersedia';
+                            return AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              child: (state.filteredDocuments.isEmpty)
+                                  ? KeyedSubtree(
+                                      key: const ValueKey('__empty__'),
+                                      child: _buildEmptyState(context, state),
+                                    )
+                                  : LayoutBuilder(
+                                      key: ValueKey(state.selectedStatus),
+                                      builder: (context, constraints) {
+                                        final bool isWideScreen =
+                                            constraints.maxWidth > 600;
 
-                                  Widget leadingIcon;
-                                  String subtitle;
-
-                                  switch (status) {
-                                    case 'Diverifikasi':
-                                    case 'Disetujui':
-                                      leadingIcon = Image.asset(
-                                        'assets/icons/fluent_document-checkmark-20-regular.png',
-                                        width: 24,
-                                        height: 24,
-                                      );
-                                      subtitle =
-                                          'Status: Selesai\nDiunggah: ${formatDate(file['uploaded_at'])}';
-                                      break;
-
-                                    case 'Ditolak':
-                                      leadingIcon = Image.asset(
-                                        'assets/icons/fluent_document-prohibited-24-regular.png',
-                                        width: 24,
-                                        height: 24,
-                                      );
-
-                                      String comment = '';
-                                      final recipients =
-                                          file['recipients']
-                                              as List<dynamic>? ??
-                                          [];
-
-                                      final rejectedRecipient = recipients
-                                          .firstWhere((rec) {
-                                            if (rec is! Map<String, dynamic>) {
-                                              return false;
-                                            }
-                                            final recStatus =
-                                                (rec['status'] as String?)
-                                                    ?.toLowerCase() ??
-                                                '';
-                                            return recStatus == 'rejected' ||
-                                                recStatus == 'ditolak';
-                                          }, orElse: () => null);
-
-                                      if (rejectedRecipient != null) {
-                                        final String? rejectionComment =
-                                            rejectedRecipient['keterangan']
-                                                as String?;
-                                        if (rejectionComment != null &&
-                                            rejectionComment.isNotEmpty) {
-                                          comment = rejectionComment;
+                                        if (isWideScreen) {
+                                          return RefreshIndicator(
+                                            onRefresh: () async {
+                                              context.read<FilesBloc>().add(
+                                                LoadAllFiles(),
+                                              );
+                                            },
+                                            child: GridView.builder(
+                                              padding: const EdgeInsets.all(12),
+                                              gridDelegate:
+                                                  const SliverGridDelegateWithMaxCrossAxisExtent(
+                                                    maxCrossAxisExtent: 450.0,
+                                                    mainAxisSpacing: 12.0,
+                                                    crossAxisSpacing: 12.0,
+                                                    childAspectRatio: 3.5,
+                                                  ),
+                                              itemCount: state
+                                                  .filteredDocuments
+                                                  .length,
+                                              itemBuilder: (context, index) {
+                                                return _DocumentCard(
+                                                  pageState: this,
+                                                  file: state
+                                                      .filteredDocuments[index],
+                                                );
+                                              },
+                                            ),
+                                          );
+                                        } else {
+                                          return RefreshIndicator(
+                                            onRefresh: () async {
+                                              context.read<FilesBloc>().add(
+                                                LoadAllFiles(),
+                                              );
+                                            },
+                                            child: ListView.builder(
+                                              padding: const EdgeInsets.only(
+                                                top: 8,
+                                                bottom: 20,
+                                              ),
+                                              itemCount: state
+                                                  .filteredDocuments
+                                                  .length,
+                                              itemBuilder: (context, index) {
+                                                return _DocumentCard(
+                                                  pageState: this,
+                                                  file: state
+                                                      .filteredDocuments[index],
+                                                );
+                                              },
+                                            ),
+                                          );
                                         }
-                                      }
-
-                                      if (comment.isNotEmpty) {
-                                        subtitle =
-                                            'Status: Ditolak\nKeterangan: $comment';
-                                      } else {
-                                        subtitle =
-                                            'Status: Ditolak\nDiunggah: ${formatDate(file['uploaded_at'])}';
-                                      }
-                                      break;
-
-                                    case 'Pending':
-                                    default:
-                                      leadingIcon = Image.asset(
-                                        'assets/icons/fluent_document-sync-24-regular (1).png',
-                                        width: 24,
-                                        height: 24,
-                                      );
-                                      subtitle =
-                                          'Status: Proses\nDiunggah: ${formatDate(file['uploaded_at'])}';
-                                  }
-
-                                  return Card(
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 2,
-                                    child: ListTile(
-                                      leading: leadingIcon,
-                                      title: Text(
-                                        originalName,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        subtitle,
-                                        maxLines: 3,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      isThreeLine: true,
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.more_vert),
-                                        onPressed: () {
-                                          _showActionMenu(context, file);
-                                        },
-                                      ),
-                                      onTap: () {
-                                        _showOptionsDialog(context, file);
                                       },
                                     ),
-                                  );
-                                },
-                              ),
                             );
                           }
                           return const SizedBox.shrink();
@@ -556,6 +634,120 @@ class ArsipDokumenPage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// --- WIDGETS PENDUKUNG ---
+
+class _DocumentCard extends StatelessWidget {
+  final _ArsipDokumenPageState pageState;
+  final Map<String, dynamic> file;
+
+  const _DocumentCard({required this.pageState, required this.file});
+
+  @override
+  Widget build(BuildContext context) {
+    final String status = file['status'] ?? 'Pending';
+    final String originalName = file['original_name'] ?? 'Nama tidak tersedia';
+
+    Widget leadingIcon;
+    String subtitle;
+
+    switch (status) {
+      case 'Diverifikasi':
+      case 'Disetujui':
+        leadingIcon = Image.asset(
+          'assets/icons/fluent_document-checkmark-20-regular.png',
+          width: 24,
+          height: 24,
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.check_circle, color: Colors.green, size: 24),
+        );
+        subtitle =
+            'Status: Selesai\nDiunggah: ${pageState.formatDate(file['uploaded_at'])}';
+        break;
+
+      case 'Ditolak':
+        leadingIcon = Image.asset(
+          'assets/icons/fluent_document-prohibited-24-regular.png',
+          width: 24,
+          height: 24,
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.cancel, color: Colors.red, size: 24),
+        );
+
+        String comment = '';
+        final recipients = file['recipients'] as List<dynamic>? ?? [];
+        final rejectedRecipient = recipients.firstWhere((rec) {
+          if (rec is! Map<String, dynamic>) return false;
+          final recStatus = (rec['status'] as String?)?.toLowerCase() ?? '';
+          return recStatus == 'rejected' || recStatus == 'ditolak';
+        }, orElse: () => null);
+
+        if (rejectedRecipient != null) {
+          final String? rejectionComment =
+              rejectedRecipient['keterangan'] as String?;
+          if (rejectionComment != null && rejectionComment.isNotEmpty) {
+            comment = rejectionComment;
+          }
+        }
+
+        if (comment.isNotEmpty) {
+          subtitle = 'Status: Ditolak\nKeterangan: $comment';
+        } else {
+          subtitle =
+              'Status: Ditolak\nDiunggah: ${pageState.formatDate(file['uploaded_at'])}';
+        }
+        break;
+
+      case 'Pending':
+      default:
+        leadingIcon = Image.asset(
+          'assets/icons/fluent_document-sync-24-regular (1).png',
+          width: 24,
+          height: 24,
+          errorBuilder: (context, error, stackTrace) =>
+              const Icon(Icons.sync, color: Colors.blue, size: 24),
+        );
+        subtitle =
+            'Status: Proses\nDiunggah: ${pageState.formatDate(file['uploaded_at'])}';
+    }
+
+    return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 2,
+          child: ListTile(
+            leading: leadingIcon,
+            title: Text(
+              originalName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+            subtitle: Text(
+              subtitle,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+            ),
+            isThreeLine: true,
+            trailing: IconButton(
+              icon: const Icon(Icons.more_vert),
+              onPressed: () {
+                pageState._showActionMenu(context, file);
+              },
+            ),
+            onTap: () {
+              pageState._showOptionsDialog(context, file);
+            },
+          ),
+        )
+        .animate()
+        .fadeIn(duration: 400.ms)
+        .slideY(begin: 0.2, end: 0.0, curve: Curves.easeOutCubic);
   }
 }
 
@@ -582,80 +774,82 @@ class _DetailDokumenDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.0)),
       elevation: 0,
       backgroundColor: Colors.transparent,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20.0),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                originalName,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _buildStatusChip(status),
-              const SizedBox(height: 24),
-              Text(
-                'Tujuan Surat : $tujuanSurat',
-                style: const TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Ditujukan Kepada :',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Column(
-                children: recipients.map((rec) {
-                  if (rec is Map<String, dynamic>) {
-                    return _buildRecipientRow(rec);
-                  }
-                  return const SizedBox.shrink();
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8.0,
-                runSpacing: 4.0,
-                children: [
-                  if (canShare)
-                    TextButton(
-                      child: const Text(
-                        'Bagikan',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      onPressed: onShare,
-                    ),
-                  TextButton(
-                    child: const Text(
-                      'Review',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    onPressed: onReview,
+      child:
+          ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20.0),
                   ),
-                ],
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          originalName,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _buildStatusChip(status),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Tujuan Surat : $tujuanSurat',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Ditujukan Kepada :',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Column(
+                          children: recipients.map((rec) {
+                            if (rec is Map<String, dynamic>) {
+                              return _buildRecipientRow(rec);
+                            }
+                            return const SizedBox.shrink();
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              child: const Text('Review'),
+                              onPressed: onReview,
+                            ),
+                            if (canShare) ...[
+                              const SizedBox(width: 8),
+                              TextButton(
+                                child: const Text('Bagikan'),
+                                onPressed: onShare,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+              .animate()
+              .fadeIn(duration: 200.ms)
+              .scale(
+                begin: const Offset(0.9, 0.9),
+                end: const Offset(1.0, 1.0),
+                curve: Curves.easeOutCubic,
               ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -680,7 +874,7 @@ class _DetailDokumenDialog extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(20),
@@ -690,6 +884,7 @@ class _DetailDokumenDialog extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.bold,
+          fontSize: 12,
         ),
       ),
     );
@@ -711,20 +906,26 @@ class _DetailDokumenDialog extends StatelessWidget {
     if (isApproved) {
       statusIconWidget = Image.asset(
         'assets/icons/fluent_document-checkmark-20-regular.png',
-        width: 24,
-        height: 24,
+        width: 20,
+        height: 20,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.check_circle, size: 20, color: Colors.green),
       );
     } else if (isRejected) {
       statusIconWidget = Image.asset(
         'assets/icons/fluent_document-prohibited-24-regular.png',
-        width: 24,
-        height: 24,
+        width: 20,
+        height: 20,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.cancel, size: 20, color: Colors.red),
       );
     } else {
       statusIconWidget = Image.asset(
         'assets/icons/fluent_document-sync-24-regular (1).png',
-        width: 24,
-        height: 24,
+        width: 20,
+        height: 20,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.sync, size: 20, color: Colors.blue),
       );
     }
 
@@ -740,7 +941,7 @@ class _DetailDokumenDialog extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Nama : $name',
-                  style: const TextStyle(fontSize: 16),
+                  style: const TextStyle(fontSize: 14),
                 ),
               ),
               const SizedBox(width: 16),
@@ -749,10 +950,14 @@ class _DetailDokumenDialog extends StatelessWidget {
           ),
           if (isRejected && comment != null && comment.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 6.0, right: 30.0),
+              padding: const EdgeInsets.only(top: 4.0),
               child: Text(
-                'Keterangan : $comment',
-                style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
+                'Ket: $comment',
+                style: TextStyle(
+                  color: Colors.red.shade700,
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
         ],
@@ -762,6 +967,7 @@ class _DetailDokumenDialog extends StatelessWidget {
 }
 
 class _ActionMenuSheet extends StatelessWidget {
+  final Map<String, dynamic> file;
   final bool canShare;
   final bool canCancel;
   final VoidCallback onReview;
@@ -769,6 +975,7 @@ class _ActionMenuSheet extends StatelessWidget {
   final VoidCallback onCancel;
 
   const _ActionMenuSheet({
+    required this.file,
     required this.canShare,
     required this.canCancel,
     required this.onReview,
@@ -778,33 +985,133 @@ class _ActionMenuSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Wrap(
-        children: <Widget>[
-          ListTile(
-            leading: const Icon(Icons.preview_rounded),
-            title: const Text('Review Dokumen'),
-            onTap: onReview,
-          ),
-          if (canShare)
-            ListTile(
-              leading: const Icon(Icons.share_outlined),
-              title: const Text('Bagikan (Share)'),
-              onTap: onShare,
-            ),
-          const Divider(height: 1),
+    final bool isRejected = (file['status'] == 'Ditolak');
+    final String deleteOrCancelText = isRejected
+        ? 'Hapus Dokumen'
+        : 'Batalkan Dokumen';
 
-          if (canCancel)
-            ListTile(
-              leading: Icon(Icons.cancel_outlined, color: Colors.red.shade700),
-              title: Text(
-                'Batalkan Dokumen',
-                style: TextStyle(color: Colors.red.shade700),
-              ),
-              onTap: onCancel,
-            ),
-        ],
-      ),
+    return SafeArea(
+      child:
+          Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12.0),
+                    child: Container(
+                      width: 40,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2.5),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      'Opsi Dokumen',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    leading: const Icon(Icons.preview_rounded),
+                    title: const Text('Review Dokumen'),
+                    onTap: onReview,
+                  ),
+                  if (canShare)
+                    ListTile(
+                      leading: const Icon(Icons.share_outlined),
+                      title: const Text('Bagikan (Share)'),
+                      onTap: onShare,
+                    ),
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+                  if (canCancel)
+                    ListTile(
+                      leading: Icon(
+                        Icons.cancel_outlined,
+                        color: Colors.red.shade700,
+                      ),
+                      title: Text(
+                        deleteOrCancelText,
+                        style: TextStyle(color: Colors.red.shade700),
+                      ),
+                      onTap: onCancel,
+                    ),
+                  const SizedBox(height: 8),
+                ],
+              )
+              .animate()
+              .fadeIn(duration: 200.ms)
+              .slideY(begin: 0.2, end: 0.0, curve: Curves.easeOutCubic),
     );
   }
+}
+
+// --- ENUM & HELPER ---
+
+enum StatusType { loading, success, failure }
+
+void _showStatusDialog(BuildContext context, String message, StatusType type) {
+  final IconData icon;
+  final Color color;
+  final bool isDismissible;
+  final Duration displayDuration;
+  Widget indicator;
+
+  switch (type) {
+    case StatusType.loading:
+      icon = Icons.loop;
+      color = Colors.blue;
+      isDismissible = false;
+      displayDuration = const Duration(seconds: 60); // Safety timeout
+      indicator = const CircularProgressIndicator();
+      break;
+    case StatusType.success:
+      icon = Icons.check_circle;
+      color = Colors.green;
+      isDismissible = true;
+      displayDuration = const Duration(seconds: 2);
+      indicator = Icon(icon, color: color, size: 48);
+      break;
+    case StatusType.failure:
+      icon = Icons.error_outline;
+      color = Colors.red;
+      isDismissible = true;
+      displayDuration = const Duration(seconds: 3);
+      indicator = Icon(icon, color: color, size: 48);
+      break;
+  }
+
+  showDialog(
+    context: context,
+    barrierDismissible: isDismissible,
+    builder: (BuildContext dialogContext) {
+      if (type != StatusType.loading) {
+        Future.delayed(displayDuration, () {
+          if (dialogContext.mounted) {
+            Navigator.of(dialogContext).pop();
+          }
+        });
+      }
+
+      return AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            indicator,
+            const SizedBox(height: 20),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      );
+    },
+  );
 }

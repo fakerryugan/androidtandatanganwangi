@@ -14,15 +14,14 @@ class FilesLoading extends FilesState {}
 class FilesLoaded extends FilesState {
   final List<Map<String, dynamic>> allDocuments;
   final List<Map<String, dynamic>> filteredDocuments;
-  final String
-  selectedStatus; // Menyimpan status filter (cth: 'Semua', 'Pending')
-  final String currentQuery; // Menyimpan kueri pencarian terakhir
+  final String selectedStatus;
+  final String currentQuery;
 
   const FilesLoaded({
     required this.allDocuments,
     required this.filteredDocuments,
-    this.selectedStatus = 'Semua', // Default 'Semua'
-    this.currentQuery = '', // Default string kosong
+    this.selectedStatus = 'Semua',
+    this.currentQuery = '',
   });
 
   FilesLoaded copyWith({
@@ -48,10 +47,9 @@ class FilesLoaded extends FilesState {
   ];
 }
 
-// State untuk Share
 class FileReadyForSharing extends FilesState {
-  final String tempFilePath; // Path file di cache
-  final String originalName; // Nama file untuk teks share
+  final String tempFilePath;
+  final String originalName;
 
   const FileReadyForSharing(this.tempFilePath, this.originalName);
 
@@ -67,7 +65,6 @@ class FileShareFailure extends FilesState {
   List<Object?> get props => [message];
 }
 
-// State untuk Error umum
 class FilesError extends FilesState {
   final String message;
   const FilesError(this.message);
@@ -77,9 +74,15 @@ class FilesError extends FilesState {
 }
 
 // --- STATE BARU UNTUK PROSES CANCEL ---
-// State ini akan didengarkan oleh BlocListener di ArsipDokumenPage.dart
 
-// 1. Sukses (Kasus 1: Soft Delete / Diarsipkan)
+class FileCancelProcessing extends FilesState {
+  final String fileName;
+  const FileCancelProcessing(this.fileName);
+
+  @override
+  List<Object> get props => [fileName];
+}
+
 class FileCancelSuccess extends FilesState {
   final String message;
   const FileCancelSuccess(this.message);
@@ -88,16 +91,18 @@ class FileCancelSuccess extends FilesState {
   List<Object> get props => [message];
 }
 
-// 2. Sukses (Kasus 2: Permintaan pembatalan terkirim)
+// PERBAIKAN DISINI:
 class FileCancelRequestSent extends FilesState {
   final String message;
-  const FileCancelRequestSent(this.message);
+  final String? fileName; // Ubah jadi nullable (opsional)
+
+  // Perbaikan Constructor: Menghapus 'this.this' dan menggunakan named parameter optional
+  const FileCancelRequestSent(this.message, {this.fileName});
 
   @override
-  List<Object> get props => [message];
+  List<Object?> get props => [message, fileName];
 }
 
-// 3. Gagal
 class FileCancelFailure extends FilesState {
   final String message;
   const FileCancelFailure(this.message);
@@ -105,4 +110,3 @@ class FileCancelFailure extends FilesState {
   @override
   List<Object> get props => [message];
 }
-// --- AKHIR STATE BARU ---

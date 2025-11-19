@@ -3,6 +3,7 @@ part of 'files_bloc.dart';
 abstract class FilesEvent extends Equatable {
   const FilesEvent();
 
+  @override
   List<Object> get props => [];
 }
 
@@ -41,10 +42,10 @@ class ShareFile extends FilesEvent {
   List<Object> get props => [accessToken, encryptedName, originalName];
 }
 
-// Ini adalah event yang benar yang dipanggil oleh ArsipDokumenPage.dart
 class CancelDocumentRequested extends FilesEvent {
   final int documentId;
   const CancelDocumentRequested(this.documentId);
+
   @override
   List<Object> get props => [documentId];
 }

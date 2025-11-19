@@ -3,7 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/services/fcm_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/utils/network_helper.dart';
-import '../../../model/model_user.dart';
+import '../../../core/model/model_user.dart';
 import '../repository/login_repository.dart';
 import 'login_event.dart';
 import 'login_state.dart';

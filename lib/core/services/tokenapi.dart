@@ -46,6 +46,7 @@ abstract class ApiService {
 
   // --- BARU: Metode untuk mengambil dokumen penolakan ---
   Future<List<Map<String, dynamic>>> fetchRejectionDocuments();
+  Future<bool> approveCancellation(String signToken);
 }
 
 // --- Implementasi Service Layer ---
@@ -282,6 +283,21 @@ class ApiServiceImpl implements ApiService {
       final response = await _dio.get('/signatures/cancellation-requests');
       // Asumsi struktur data sama dengan fetch lain (kunci 'documents')
       return List<Map<String, dynamic>>.from(response.data['documents'] ?? []);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  Future<bool> approveCancellation(String signToken) async {
+    try {
+      // URL Base dan Token Auth sudah ditangani oleh _dio di constructor
+      final response = await _dio.post(
+        '/signatures/approve-cancellation/$signToken',
+      );
+
+      // Dio biasanya melempar error jika status code bukan 2xx
+      // Jadi jika sampai sini, berarti sukses (200 OK)
+      return response.statusCode == 200;
     } on DioException catch (e) {
       throw _handleDioError(e);
     }

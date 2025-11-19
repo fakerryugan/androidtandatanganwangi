@@ -56,7 +56,7 @@ dependencies:
   permission_handler: ^12.0.1
   crypto: ^3.0.6
   fluentui_icons: ^1.0.0
-
+  flutter_animate: ^4.5.2
 
 
 dev_dependencies:

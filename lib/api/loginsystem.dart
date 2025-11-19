@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../model/model_user.dart';
+import '../core/model/model_user.dart';
 
 class LoginRepository {
   final String baseUrl = "http://fakerryugan.my.id/api";

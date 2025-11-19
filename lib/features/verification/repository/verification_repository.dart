@@ -1,4 +1,4 @@
-import '../../../core/services/tokenapi.dart'; // Pastikan path ini benar
+import '../../../core/services/tokenapi.dart';
 
 class VerificationRepository {
   final ApiService _apiService;
@@ -15,7 +15,11 @@ class VerificationRepository {
     String status,
   ) => _apiService.processSignature(signToken, status);
 
-  // --- BARU: Metode Penolakan ---
+  // --- Metode Penolakan ---
   Future<List<Map<String, dynamic>>> getRejectionDocuments() =>
       _apiService.fetchRejectionDocuments();
+
+  // PERBAIKAN DI SINI: Hubungkan ke ApiService
+  Future<bool> approveCancellation(String signToken) =>
+      _apiService.approveCancellation(signToken);
 }

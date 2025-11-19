@@ -14,7 +14,29 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
     : _repository = repository,
       super(VerificationInitial()) {
     on<LoadVerificationDocuments>(_onLoadVerificationDocuments);
-    on<SearchVerificationDocuments>(_onSearchVerificationDocuments);
+  }
+
+  // --- HELPER: SORTING (Terbaru di Atas) ---
+  List<Map<String, dynamic>> _sortDocumentsByDate(
+    List<Map<String, dynamic>> docs,
+  ) {
+    // Buat salinan list agar tidak memodifikasi list asli secara langsung
+    final sortedList = List<Map<String, dynamic>>.from(docs);
+
+    sortedList.sort((a, b) {
+      // Ambil tanggal upload (Ganti 'uploaded_at' sesuai key dari API Anda, misal 'created_at')
+      final dateA =
+          DateTime.tryParse(a['uploaded_at']?.toString() ?? '') ??
+          DateTime(1970);
+      final dateB =
+          DateTime.tryParse(b['uploaded_at']?.toString() ?? '') ??
+          DateTime(1970);
+
+      // Bandingkan B ke A (Descending) agar yang terbaru ada di atas
+      return dateB.compareTo(dateA);
+    });
+
+    return sortedList;
   }
 
   Future<void> _onLoadVerificationDocuments(
@@ -24,31 +46,18 @@ class VerificationBloc extends Bloc<VerificationEvent, VerificationState> {
     emit(VerificationLoading());
     try {
       final documents = await _repository.getVerificationDocuments();
+
+      // URUTKAN DATA SEBELUM DI-EMIT
+      final sortedDocs = _sortDocumentsByDate(documents);
+
       emit(
         VerificationLoaded(
-          allDocuments: documents,
-          filteredDocuments: documents,
+          allDocuments: sortedDocs,
+          filteredDocuments: sortedDocs,
         ),
       );
     } catch (e) {
       emit(VerificationError(e.toString()));
-    }
-  }
-
-  void _onSearchVerificationDocuments(
-    SearchVerificationDocuments event,
-    Emitter<VerificationState> emit,
-  ) {
-    if (state is VerificationLoaded) {
-      final currentState = state as VerificationLoaded;
-      final query = event.query.toLowerCase();
-
-      final filtered = currentState.allDocuments.where((doc) {
-        final name = (doc['original_name'] ?? '').toLowerCase();
-        return name.contains(query);
-      }).toList();
-
-      emit(currentState.copyWith(filteredDocuments: filtered));
     }
   }
 }

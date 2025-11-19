@@ -1,13 +1,15 @@
+import 'package:android/core/widgets/HoverAnimator.dart';
 import 'package:android/features/file/view/lihatsemuapage.dart';
 import 'package:android/features/file/view/arsipdokumen.dart';
 import 'package:android/features/scan/view/scanner_page.dart';
 import 'package:android/features/verification/view/file_pengajuan_main_page.dart';
 
-import 'package:android/features/verification/view/fileverifikasipage.dart';
 import 'package:android/upload_file/upload.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../bloc/dashboard_bloc.dart';
+
+// (Pastikan widget HoverAnimator dari langkah 1 ada di file ini, di luar class ini)
 
 class MenuHome extends StatelessWidget {
   const MenuHome({super.key});
@@ -70,30 +72,39 @@ class MenuHome extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        state.name, // Dari state baru
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 24.4,
+                                  // --- MODIFIKASI ---
+                                  // Membungkus kolom teks dengan Flexible agar nama
+                                  // atau role yang panjang tidak error (pixel overflow)
+                                  Flexible(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          state.name,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 24.4,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ),
-                                      Text(
-                                        state.role, // Dari state baru
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12.2,
+                                        Text(
+                                          state.role,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12.2,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 20),
-                              // Bagian Tombol Aksi Utama - DIUBAH MENJADI PLACEHOLDER SEMENTARA
+                              // Bagian Tombol Aksi Utama
                               Container(
                                 margin: const EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -121,64 +132,80 @@ class MenuHome extends StatelessWidget {
                                 child: Row(
                                   children: [
                                     Expanded(
-                                      child: buildButton(
-                                        Icons.qr_code,
-                                        'Scan QR',
-                                        () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  BarcodeScannerPage(),
-                                            ),
-                                          );
-                                        },
-                                        key: const Key(
-                                          'scan_qr_button',
-                                        ), // <-- TAMBAHKAN INI
+                                      // --- MODIFIKASI ---
+                                      // Dibungkus dengan HoverAnimator
+                                      child: HoverAnimator(
+                                        child: buildButton(
+                                          Icons.qr_code,
+                                          'Scan QR',
+                                          () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    BarcodeScannerPage(),
+                                              ),
+                                            );
+                                          },
+                                          key: const Key('scan_qr_button'),
+                                        ),
                                       ),
                                     ),
                                     Expanded(
-                                      child: buildButton(
-                                        Icons.upload_file,
-                                        'Upload File',
-                                        () {
-                                          PdfPickerHelper.pickAndOpenPdf(
-                                            context,
-                                          );
-                                        },
-                                        key: const Key('upload_file_button'),
+                                      // --- MODIFIKASI ---
+                                      // Dibungkus dengan HoverAnimator
+                                      child: HoverAnimator(
+                                        child: buildButton(
+                                          Icons.upload_file,
+                                          'Upload File',
+                                          () {
+                                            PdfPickerHelper.pickAndOpenPdf(
+                                              context,
+                                            );
+                                          },
+                                          key: const Key('upload_file_button'),
+                                        ),
                                       ),
                                     ),
                                     Expanded(
-                                      child: buildButton(
-                                        Icons.verified,
-                                        'Status File',
-                                        () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  ArsipDokumenPage(),
-                                            ),
-                                          );
-                                        },
+                                      // --- MODIFIKASI ---
+                                      // Dibungkus dengan HoverAnimator
+                                      child: HoverAnimator(
+                                        child: buildButton(
+                                          Icons.verified,
+                                          'Status File',
+                                          () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    ArsipDokumenPage(),
+                                              ),
+                                            );
+                                          },
+                                        ),
                                       ),
                                     ),
                                     Expanded(
-                                      child: buildButton(
-                                        Icons.mobile_friendly,
-                                        'Pengajuan',
-                                        () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  FileReviewMainPage(),
-                                            ),
-                                          );
-                                        },
-                                        key: const Key('verifikasi_ttd_button'),
+                                      // --- MODIFIKASI ---
+                                      // Dibungkus dengan HoverAnimator
+                                      child: HoverAnimator(
+                                        child: buildButton(
+                                          Icons.mobile_friendly,
+                                          'Pengajuan',
+                                          () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) =>
+                                                    FileReviewMainPage(),
+                                              ),
+                                            );
+                                          },
+                                          key: const Key(
+                                            'verifikasi_ttd_button',
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -210,23 +237,31 @@ class MenuHome extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          GestureDetector(
+                          // --- MODIFIKASI ---
+                          // Mengganti GestureDetector dengan InkWell
+                          InkWell(
                             onTap: () {
-                              {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const LihatSemuaPage(),
-                                  ),
-                                );
-                              }
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const LihatSemuaPage(),
+                                ),
+                              );
                             },
-                            child: const Text(
-                              'Lihat Semua >',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Color.fromARGB(255, 56, 56, 56),
+                            borderRadius: BorderRadius.circular(
+                              8,
+                            ), // Efek ripple bulat
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 8.0,
+                                vertical: 4.0,
+                              ),
+                              child: Text(
+                                'Lihat Semua >',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color.fromARGB(255, 56, 56, 56),
+                                ),
                               ),
                             ),
                           ),
@@ -236,6 +271,9 @@ class MenuHome extends StatelessWidget {
                     if (state.documents.isNotEmpty)
                       ...state.documents.map((file) {
                         return ListTile(
+                          // --- MODIFIKASI ---
+                          // Menambahkan warna saat di-hover (untuk web/desktop)
+                          hoverColor: Colors.grey.withOpacity(0.1),
                           leading: const Icon(
                             Icons.insert_drive_file,
                             color: Colors.blue,
@@ -248,7 +286,19 @@ class MenuHome extends StatelessWidget {
                             Icons.arrow_forward_ios,
                             size: 16,
                           ),
-                          onTap: () {},
+                          // --- MODIFIKASI ---
+                          // Mengisi onTap agar ripple effect terlihat
+                          onTap: () {
+                            // Aksi ini membuat ripple-effect-nya terlihat
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Membuka ${file['original_name'] ?? 'dokumen'}...',
+                                ),
+                                duration: const Duration(seconds: 1),
+                              ),
+                            );
+                          },
                         );
                       })
                     else
@@ -269,8 +319,7 @@ class MenuHome extends StatelessWidget {
     );
   }
 
-  // Fungsi buildButton (widget pembangun tombol) masih disimpan,
-  // tetapi tidak digunakan di dalam `build` di bagian aksi utama.
+  // Fungsi buildButton tidak perlu diubah sama sekali
   Widget buildButton(
     IconData icon,
     String label,

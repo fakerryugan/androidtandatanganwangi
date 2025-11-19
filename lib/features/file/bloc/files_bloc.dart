@@ -16,42 +16,45 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
     on<SearchFiles>(_onSearchFiles);
     on<ShareFile>(_onShareFile);
     on<FilterFilesByStatus>(_onFilterFilesByStatus);
-
-    // --- PERUBAHAN ---
-    // Mengganti on<DeleteFile> dengan on<CancelDocumentRequested>
     on<CancelDocumentRequested>(_onCancelDocumentRequested);
-    // --- AKHIR PERUBAHAN ---
   }
 
+  // --- LOGIC FILTER & SEARCH (GLOBAL) ---
   List<Map<String, dynamic>> _filterDocuments({
     required List<Map<String, dynamic>> allDocs,
     required String status,
     required String query,
   }) {
-    final lowerQuery = query.toLowerCase();
+    final lowerQuery = query.toLowerCase().trim();
+    // Jika query tidak kosong, aktifkan mode SEARCHING (Abaikan Tab Status)
+    final isSearching = lowerQuery.isNotEmpty;
 
     return allDocs.where((doc) {
-      // 1. Cek Status
-      final docStatus = doc['status'] ?? 'Pending';
-      final bool statusMatch;
-      if (status == 'Semua') {
-        statusMatch = true;
-      } else {
-        // Ini memetakan 'Disetujui' (label UI) ke 'Diverifikasi' (data)
-        // DAN juga mencocokkan 'Disetujui' jika ada di data.
-        if (status == 'Disetujui') {
-          statusMatch =
-              (docStatus == 'Disetujui' || docStatus == 'Diverifikasi');
-        } else {
-          statusMatch = docStatus == status;
-        }
+      // 1. Cek Nama File
+      final originalNameRaw = doc['original_name'];
+      final nameStr = (originalNameRaw != null)
+          ? originalNameRaw.toString().toLowerCase()
+          : '';
+      final bool queryMatch = nameStr.contains(lowerQuery);
+
+      // JIKA SEDANG MENCARI: Return hasil match nama saja (Cari di semua tab)
+      if (isSearching) {
+        return queryMatch;
       }
 
-      // 2. Cek Kueri Pencarian
-      final name = (doc['original_name'] ?? '').toLowerCase();
-      final bool queryMatch = name.contains(lowerQuery);
+      // JIKA TIDAK MENCARI: Filter berdasarkan Tab Status
+      final docStatusRaw = doc['status'];
+      final docStatus = (docStatusRaw != null)
+          ? docStatusRaw.toString()
+          : 'Pending';
 
-      return statusMatch && queryMatch;
+      if (status == 'Semua') return true;
+
+      if (status == 'Disetujui') {
+        return (docStatus == 'Disetujui' || docStatus == 'Diverifikasi');
+      }
+
+      return docStatus == status;
     }).toList();
   }
 
@@ -59,7 +62,6 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
     LoadAllUserFiles event,
     Emitter<FilesState> emit,
   ) async {
-    // ... (Tidak berubah)
     emit(FilesLoading());
     try {
       final documents = await _repository.getAllUserDocuments();
@@ -73,7 +75,6 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
     LoadAllFiles event,
     Emitter<FilesState> emit,
   ) async {
-    // ... (Tidak berubah)
     emit(FilesLoading());
     try {
       final documents = await _repository.getCompletedDocuments();
@@ -84,13 +85,17 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
   }
 
   void _onSearchFiles(SearchFiles event, Emitter<FilesState> emit) {
-    // ... (Tidak berubah)
     if (state is FilesLoaded) {
       final currentState = state as FilesLoaded;
 
+      // Pindah visual tab ke 'Semua' jika sedang mencari
+      final targetStatus = event.query.isNotEmpty
+          ? 'Semua'
+          : currentState.selectedStatus;
+
       final filtered = _filterDocuments(
         allDocs: currentState.allDocuments,
-        status: currentState.selectedStatus,
+        status: targetStatus,
         query: event.query,
       );
 
@@ -98,6 +103,7 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
         currentState.copyWith(
           filteredDocuments: filtered,
           currentQuery: event.query,
+          selectedStatus: targetStatus,
         ),
       );
     }
@@ -107,7 +113,6 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
     FilterFilesByStatus event,
     Emitter<FilesState> emit,
   ) {
-    // ... (Tidak berubah)
     if (state is FilesLoaded) {
       final currentState = state as FilesLoaded;
 
@@ -127,7 +132,7 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
   }
 
   Future<void> _onShareFile(ShareFile event, Emitter<FilesState> emit) async {
-    // ... (Tidak berubah)
+    final currentState = state; // Simpan state agar list tidak hilang
     try {
       final tempFilePath = await _repository.prepareTempFile(
         accessToken: event.accessToken,
@@ -135,53 +140,37 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
         originalName: event.originalName,
       );
       emit(FileReadyForSharing(tempFilePath, event.originalName));
+
+      // Restore State agar UI kembali normal setelah share muncul
+      if (currentState is FilesLoaded) emit(currentState);
     } catch (e) {
-      emit(FileShareFailure('Gagal mempersiapkan file: ${e.toString()}'));
+      emit(FileShareFailure('Gagal: ${e.toString()}'));
+      if (currentState is FilesLoaded) emit(currentState);
     }
   }
 
-  // --- HANDLER BARU UNTUK CANCEL DOCUMENT ---
-  // Menggantikan _onDeleteFile
   Future<void> _onCancelDocumentRequested(
     CancelDocumentRequested event,
     Emitter<FilesState> emit,
   ) async {
-    // Kita tidak perlu state FilesLoaded, karena kita hanya emit state ephemeral
-    // BlocListener di UI akan menangani feedback dan memuat ulang (reload)
-
+    final currentState = state; // Simpan state
     try {
-      // 1. Panggil repository (INI PERBAIKANNYA)
-      final response = await _repository.cancelDocument(
-        event.documentId,
-      ); // <-- TAMBAHKAN _repository.
+      final response = await _repository.cancelDocument(event.documentId);
 
-      // 2. Cek respons dari API (sesuai logika DocumentController.php)
-      // Cek apakah 'action' ada dan bernilai 'cancellation_request_sent'
       if (response['action'] == 'cancellation_request_sent') {
-        // KASUS 2: Permintaan pembatalan dikirim
         emit(
           FileCancelRequestSent(
-            response['message'] ?? 'Permintaan pembatalan telah dikirim.',
+            response['message'] ?? 'Permintaan terkirim.',
+            fileName: response['fileName'],
           ),
         );
+        if (currentState is FilesLoaded) emit(currentState);
       } else {
-        // KASUS 1: Dokumen berhasil diarsipkan (soft delete)
-        emit(
-          FileCancelSuccess(
-            response['message'] ?? 'Dokumen berhasil dibatalkan/diarsipkan.',
-          ),
-        );
+        emit(FileCancelSuccess(response['message'] ?? 'Berhasil.'));
       }
     } catch (e) {
-      // 3. Jika gagal (cth: 404, 403, 500), emit state failure
-      emit(
-        FileCancelFailure(
-          // Membersihkan "Exception: " dari pesan error
-          e.toString().replaceAll('Exception: ', ''),
-        ),
-      );
+      emit(FileCancelFailure(e.toString().replaceAll('Exception: ', '')));
+      if (currentState is FilesLoaded) emit(currentState);
     }
   }
-
-  // --- AKHIR HANDLER BARU ---
 }

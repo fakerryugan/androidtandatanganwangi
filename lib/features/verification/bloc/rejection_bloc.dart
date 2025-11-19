@@ -17,6 +17,7 @@ class RejectionBloc extends Bloc<RejectionEvent, RejectionState> {
       super(RejectionInitial()) {
     on<LoadRejectionDocuments>(_onLoadRejectionDocuments);
     on<SearchRejectionDocuments>(_onSearchRejectionDocuments);
+    on<ApproveRejectionDocument>(_onApproveRejectionDocument);
   }
 
   Future<void> _onLoadRejectionDocuments(
@@ -50,6 +51,29 @@ class RejectionBloc extends Bloc<RejectionEvent, RejectionState> {
       }).toList();
 
       emit(currentState.copyWith(filteredDocuments: filtered));
+    }
+  }
+
+  Future<void> _onApproveRejectionDocument(
+    ApproveRejectionDocument event,
+    Emitter<RejectionState> emit,
+  ) async {
+    // Simpan state saat ini agar bisa dikembalikan jika perlu,
+    // atau tampilkan loading overlay jika UI mendukung.
+    // Di sini kita langsung tembak API.
+
+    try {
+      await _repository.approveCancellation(event.signToken);
+
+      emit(RejectionActionSuccess("Permintaan pembatalan berhasil disetujui."));
+
+      // Setelah sukses, otomatis reload data list terbaru
+      add(LoadRejectionDocuments());
+    } catch (e) {
+      emit(RejectionActionFailure(e.toString()));
+
+      // Kembalikan ke state Loaded agar list tidak hilang (opsional)
+      add(LoadRejectionDocuments());
     }
   }
 }
