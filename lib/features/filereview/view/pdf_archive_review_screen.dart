@@ -12,11 +12,17 @@ class PdfArchiveReviewScreen extends StatelessWidget {
   final String encryptedName;
   final String originalName;
 
+  // --- TAMBAHAN: Parameter Status ---
+  // Kita bisa mengirim String status langsung atau boolean isVerified
+  final bool isVerified;
+
   const PdfArchiveReviewScreen({
     super.key,
     required this.accessToken,
     required this.encryptedName,
     required this.originalName,
+    // Default false agar aman jika tidak dikirim
+    this.isVerified = false,
   });
 
   @override
@@ -33,12 +39,10 @@ class PdfArchiveReviewScreen extends StatelessWidget {
           listener: (context, state) {
             if (state is FileReadyForSharing) {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              // Panggil dialog share
               Share.shareXFiles([
                 XFile(state.tempFilePath),
               ], text: 'Membagikan dokumen: ${state.originalName}');
             } else if (state is FileShareFailure) {
-              // Tampilkan error jika share gagal
               ScaffoldMessenger.of(context)
                 ..hideCurrentSnackBar()
                 ..showSnackBar(
@@ -49,7 +53,6 @@ class PdfArchiveReviewScreen extends StatelessWidget {
                 );
             }
           },
-          // --- AKHIR TAMBAHAN ---
           child: Scaffold(appBar: _buildAppBar(context), body: _buildBody()),
         ),
       ),
@@ -70,18 +73,38 @@ class PdfArchiveReviewScreen extends StatelessWidget {
       backgroundColor: const Color.fromRGBO(127, 146, 248, 1),
       elevation: 1,
       actions: [
-        // --- PERUBAHAN: Ikon dan fungsi diubah ke Share ---
-        IconButton(
-          icon: const Icon(Icons.share, color: Colors.white), // Ikon diubah
-          tooltip: 'Bagikan File', // Tooltip diubah
-          onPressed: () => _startShare(context), // Fungsi diubah
-        ),
-        // --- AKHIR PERUBAHAN ---
+        // --- LOGIC SHARE BUTTON ---
+        // Hanya tampilkan jika isVerified bernilai TRUE
+        if (isVerified)
+          IconButton(
+            icon: const Icon(Icons.share, color: Colors.white),
+            tooltip: 'Bagikan File',
+            onPressed: () => _startShare(context),
+          )
+        else
+          // Opsional: Tampilkan Info kenapa tidak bisa share
+          IconButton(
+            icon: Icon(
+              Icons.share,
+              color: Colors.white.withOpacity(0.5),
+            ), // Icon Redup
+            tooltip: 'Dokumen belum diverifikasi sepenuhnya',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    "Dokumen hanya bisa dibagikan setelah semua pihak menyetujui.",
+                  ),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            },
+          ),
+        // --------------------------
       ],
     );
   }
 
-  // --- PERUBAHAN: Nama fungsi dan logikanya diubah ---
   void _startShare(BuildContext context) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -92,7 +115,6 @@ class PdfArchiveReviewScreen extends StatelessWidget {
         ),
       );
 
-    // Kirim event ShareFile (dari implementasi kita sebelumnya)
     context.read<FilesBloc>().add(
       ShareFile(
         accessToken: accessToken,
@@ -101,7 +123,6 @@ class PdfArchiveReviewScreen extends StatelessWidget {
       ),
     );
   }
-  // --- AKHIR PERUBAHAN ---
 
   Widget _buildBody() {
     return BlocBuilder<PdfArchiveReviewBloc, PdfArchiveReviewState>(

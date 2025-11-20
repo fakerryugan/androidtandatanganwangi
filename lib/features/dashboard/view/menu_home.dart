@@ -3,16 +3,72 @@ import 'package:android/features/file/view/lihatsemuapage.dart';
 import 'package:android/features/file/view/arsipdokumen.dart';
 import 'package:android/features/scan/view/scanner_page.dart';
 import 'package:android/features/verification/view/file_pengajuan_main_page.dart';
-
+import 'package:android/features/filereview/view/pdf_archive_review_screen.dart';
 import 'package:android/upload_file/upload.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // WAJIB: Tambahkan ini
 import '../bloc/dashboard_bloc.dart';
-
-// (Pastikan widget HoverAnimator dari langkah 1 ada di file ini, di luar class ini)
 
 class MenuHome extends StatelessWidget {
   const MenuHome({super.key});
+
+  // --- FUNGSI NAVIGASI KE REVIEW (DIPERBAIKI) ---
+  Future<void> _reviewFile(
+    BuildContext context,
+    Map<String, dynamic> file,
+  ) async {
+    // 1. AMBIL TOKEN DARI PENYIMPANAN HP (Bukan dari file map)
+    final prefs = await SharedPreferences.getInstance();
+    // Pastikan key 'token' sesuai dengan yang Anda pakai saat Login (lihat ApiServiceImpl)
+    final String? accessToken = prefs.getString('token');
+
+    // 2. Ambil Data File
+    final encryptedName = file['encrypted_original_filename'] as String?;
+    final originalName = file['original_name'] as String?;
+    final String status = file['status'] as String? ?? 'Pending';
+
+    // 3. Validasi Data
+    if (accessToken == null || encryptedName == null || originalName == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal: Token atau Data Dokumen tidak ditemukan.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // 4. Tentukan Logika Verified (Boleh Share atau Tidak)
+    final bool isVerifiedDocument =
+        (status == 'Diverifikasi' || status == 'Disetujui');
+
+    // 5. Tampilkan Notifikasi Kecil
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Membuka "$originalName"...'),
+          duration: const Duration(milliseconds: 800),
+          backgroundColor: Colors.blue,
+        ),
+      );
+
+      // 6. Navigasi Langsung ke PdfArchiveReviewScreen
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PdfArchiveReviewScreen(
+            accessToken: accessToken, // Token yang benar dari SharedPreferences
+            encryptedName: encryptedName,
+            originalName: originalName,
+            isVerified: isVerifiedDocument, // Kirim status verified
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +86,7 @@ class MenuHome extends StatelessWidget {
           return Scaffold(
             body: CustomScrollView(
               slivers: [
+                // --- HEADER & APP BAR ---
                 SliverAppBar(
                   automaticallyImplyLeading: false,
                   pinned: false,
@@ -72,9 +129,6 @@ class MenuHome extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  // --- MODIFIKASI ---
-                                  // Membungkus kolom teks dengan Flexible agar nama
-                                  // atau role yang panjang tidak error (pixel overflow)
                                   Flexible(
                                     child: Column(
                                       crossAxisAlignment:
@@ -104,7 +158,8 @@ class MenuHome extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 20),
-                              // Bagian Tombol Aksi Utama
+
+                              // Bagian Tombol Menu Utama
                               Container(
                                 margin: const EdgeInsets.symmetric(
                                   horizontal: 16,
@@ -132,8 +187,6 @@ class MenuHome extends StatelessWidget {
                                 child: Row(
                                   children: [
                                     Expanded(
-                                      // --- MODIFIKASI ---
-                                      // Dibungkus dengan HoverAnimator
                                       child: HoverAnimator(
                                         child: buildButton(
                                           Icons.qr_code,
@@ -152,8 +205,6 @@ class MenuHome extends StatelessWidget {
                                       ),
                                     ),
                                     Expanded(
-                                      // --- MODIFIKASI ---
-                                      // Dibungkus dengan HoverAnimator
                                       child: HoverAnimator(
                                         child: buildButton(
                                           Icons.upload_file,
@@ -168,8 +219,6 @@ class MenuHome extends StatelessWidget {
                                       ),
                                     ),
                                     Expanded(
-                                      // --- MODIFIKASI ---
-                                      // Dibungkus dengan HoverAnimator
                                       child: HoverAnimator(
                                         child: buildButton(
                                           Icons.verified,
@@ -187,8 +236,6 @@ class MenuHome extends StatelessWidget {
                                       ),
                                     ),
                                     Expanded(
-                                      // --- MODIFIKASI ---
-                                      // Dibungkus dengan HoverAnimator
                                       child: HoverAnimator(
                                         child: buildButton(
                                           Icons.mobile_friendly,
@@ -218,7 +265,8 @@ class MenuHome extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Bagian Daftar Terbaru
+
+                // --- LIST DOKUMEN TERBARU ---
                 SliverList(
                   delegate: SliverChildListDelegate([
                     Container(
@@ -237,8 +285,6 @@ class MenuHome extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          // --- MODIFIKASI ---
-                          // Mengganti GestureDetector dengan InkWell
                           InkWell(
                             onTap: () {
                               Navigator.push(
@@ -248,9 +294,7 @@ class MenuHome extends StatelessWidget {
                                 ),
                               );
                             },
-                            borderRadius: BorderRadius.circular(
-                              8,
-                            ), // Efek ripple bulat
+                            borderRadius: BorderRadius.circular(8),
                             child: const Padding(
                               padding: EdgeInsets.symmetric(
                                 horizontal: 8.0,
@@ -271,8 +315,6 @@ class MenuHome extends StatelessWidget {
                     if (state.documents.isNotEmpty)
                       ...state.documents.map((file) {
                         return ListTile(
-                          // --- MODIFIKASI ---
-                          // Menambahkan warna saat di-hover (untuk web/desktop)
                           hoverColor: Colors.grey.withOpacity(0.1),
                           leading: const Icon(
                             Icons.insert_drive_file,
@@ -286,18 +328,9 @@ class MenuHome extends StatelessWidget {
                             Icons.arrow_forward_ios,
                             size: 16,
                           ),
-                          // --- MODIFIKASI ---
-                          // Mengisi onTap agar ripple effect terlihat
+                          // --- NAVIGASI LANGSUNG KE PDF REVIEW ---
                           onTap: () {
-                            // Aksi ini membuat ripple-effect-nya terlihat
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'Membuka ${file['original_name'] ?? 'dokumen'}...',
-                                ),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
+                            _reviewFile(context, file);
                           },
                         );
                       })
@@ -308,6 +341,7 @@ class MenuHome extends StatelessWidget {
                           child: Text('Belum ada dokumen yang diunggah.'),
                         ),
                       ),
+                    const SizedBox(height: 50),
                   ]),
                 ),
               ],
@@ -319,7 +353,6 @@ class MenuHome extends StatelessWidget {
     );
   }
 
-  // Fungsi buildButton tidak perlu diubah sama sekali
   Widget buildButton(
     IconData icon,
     String label,
@@ -337,7 +370,7 @@ class MenuHome extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            fixedSize: const Size(60, 60), // tetap kotak
+            fixedSize: const Size(60, 60),
             padding: EdgeInsets.zero,
           ),
           onPressed: onPressed,

@@ -19,7 +19,6 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
     on<CancelDocumentRequested>(_onCancelDocumentRequested);
   }
 
-  // --- LOGIC FILTER & SEARCH (GLOBAL) ---
   List<Map<String, dynamic>> _filterDocuments({
     required List<Map<String, dynamic>> allDocs,
     required String status,

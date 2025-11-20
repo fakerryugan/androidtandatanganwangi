@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
-// Pastikan import ini mengarah ke BLoC Rejection Anda
 import '../bloc/rejection_bloc.dart';
 
 class FilePenolakanPage extends StatelessWidget {
@@ -57,14 +56,23 @@ class FilePenolakanPage extends StatelessWidget {
               onPressed: () {
                 Navigator.pop(dialogContext); // Tutup dialog
 
-                final documentId = doc['id'] ?? doc['document_id'];
-                if (documentId != null) {
-                  context.read<RejectionBloc>().add(
-                    ApproveRejectionDocument(documentId),
-                  );
+                // --- PERBAIKAN 1: AMBIL SIGN TOKEN, BUKAN ID ---
+                // Backend butuh token tanda tangan untuk verifikasi
+                final signToken = doc['sign_token'];
 
+                if (signToken != null) {
+                  // Kirim Event dengan Token String
+                  context.read<RejectionBloc>().add(
+                    ApproveRejectionDocument(signToken.toString()),
+                  );
+                } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Memproses persetujuan...")),
+                    const SnackBar(
+                      content: Text(
+                        "Error: Token tanda tangan tidak ditemukan",
+                      ),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               },
@@ -133,7 +141,6 @@ class FilePenolakanPage extends StatelessWidget {
                 color: Colors.grey,
               ),
               onTap: () {
-                // Panggil Pop Up Konfirmasi saat diklik
                 _showConfirmationDialog(context, doc);
               },
             ),
@@ -145,7 +152,6 @@ class FilePenolakanPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Menggunakan Builder untuk memastikan context aman (dapat mengakses Provider)
     return Builder(
       builder: (BuildContext context) {
         return Scaffold(
@@ -154,7 +160,26 @@ class FilePenolakanPage extends StatelessWidget {
             children: [
               const SizedBox(height: 12),
               Expanded(
-                child: BlocBuilder<RejectionBloc, RejectionState>(
+                // --- PERBAIKAN 2: Ganti BlocBuilder dengan BlocConsumer ---
+                // BlocConsumer punya 'listener' untuk menampilkan SnackBar
+                child: BlocConsumer<RejectionBloc, RejectionState>(
+                  listener: (context, state) {
+                    if (state is RejectionActionSuccess) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(state.message),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } else if (state is RejectionActionFailure) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text("Gagal: ${state.error}"),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
                   builder: (blocContext, state) {
                     if (state is RejectionLoading) {
                       return const Center(child: CircularProgressIndicator());
@@ -223,14 +248,15 @@ class FilePenolakanPage extends StatelessWidget {
                           ),
                         );
                       }
-                      // Tampilkan List
                       return _buildRejectionList(
                         blocContext,
                         state.filteredDocuments,
                       );
                     }
 
-                    return const SizedBox.shrink();
+                    // Saat loading aksi (Success/Failure), kita bisa tampilkan loading
+                    // atau list kosong agar tidak blank
+                    return const Center(child: CircularProgressIndicator());
                   },
                 ),
               ),
