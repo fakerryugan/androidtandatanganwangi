@@ -20,16 +20,25 @@ class PdfPickerHelper {
     final file = File(result.files.single.path!);
 
     try {
+      // 1. Upload Document
       final data = await uploadDocument(file);
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('document_id', data['document_id']);
+
+      // Ambil Access Token DOKUMEN (UUID)
+      // Pastikan backend mengirim key 'access_token' yang berisi UUID dokumen
+      final String docToken = data['access_token'];
+
+      // 2. Pindah ke Halaman Viewer
+      // Kita TIDAK PERLU mengirim User Token lewat parameter,
+      // karena PdfViewerPage bisa mengambilnya sendiri lewat SharedPreferences jika butuh.
+      // Yang PENTING adalah mengirim docToken sebagai ID Dokumen.
 
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => PdfViewerPage(
             filePath: file.path,
-            documentId: data['document_id'],
+            accessToken:
+                docToken, // <--- PERBAIKAN: Kirim UUID Dokumen, BUKAN User Token
           ),
         ),
       );

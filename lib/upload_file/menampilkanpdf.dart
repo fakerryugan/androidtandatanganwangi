@@ -1,33 +1,30 @@
-// ==========================================================
-//                   PDF VIEWER FULL TANPA BLOC
-// ==========================================================
-
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:android/api/token.dart';
-import 'package:android/features/dashboard/view/dashboard_page.dart';
+import 'package:android/upload_file/generateqr.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf_lib;
 import 'package:pdfx/pdfx.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:android/upload_file/generateqr.dart';
-import 'package:http_parser/http_parser.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf_lib;
+
+// Pastikan import ini sesuai dengan struktur project Anda
+import 'package:android/api/token.dart';
+import 'package:android/features/dashboard/view/dashboard_page.dart';
 
 final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey();
 
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
-  final int documentId;
+  final String accessToken; // Menggunakan String Access Token
   final Map<String, dynamic>? qrData;
 
   const PdfViewerPage({
     super.key,
     required this.filePath,
-    required this.documentId,
+    required this.accessToken,
     this.qrData,
   });
 
@@ -37,6 +34,10 @@ class PdfViewerPage extends StatefulWidget {
 
 class _PdfViewerPageState extends State<PdfViewerPage> {
   final PageController _pageController = PageController();
+  final TextEditingController nipController = TextEditingController();
+  final TextEditingController tujuanController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
   bool _isLoadingPdf = true;
   List<Uint8List> _pageImages = [];
   List<Size> _pdfPageSizes = [];
@@ -48,6 +49,8 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
   final ValueNotifier<Map<String, dynamic>?> _activeQrNotifier = ValueNotifier(
     null,
   );
+
+  // List untuk menyimpan QR yang sudah "disimpan/di-lock"
   List<Map<String, dynamic>> qrCodes = [];
 
   bool _isProcessing = false;
@@ -173,6 +176,78 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     }
   }
 
+  // ==============================================================
+  // LOGIKA TAMBAH QR BARU (DIPERBAIKI)
+  // ==============================================================
+  void _addNewQrCode() async {
+    if (_activeQrNotifier.value != null) {
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('Selesaikan tanda tangan yang ada dulu.')),
+      );
+      return;
+    }
+
+    // 1. Cek apakah ini tanda tangan pertama
+    // Jika qrCodes KOSONG, berarti ini yang PERTAMA -> Show Tujuan = TRUE
+    // Jika qrCodes TIDAK KOSONG, berarti ini KEDUA dst -> Show Tujuan = FALSE
+    bool isFirstSignature = qrCodes.isEmpty;
+
+    // 2. Ambil halaman aktif dari PageController
+    final int currentPageIndex = _pageController.page?.round() ?? 0;
+    final int selectedPageNumber = currentPageIndex + 1;
+
+    // 3. Panggil Dialog
+    final result = await showInputDialog(
+      context: context,
+      formKey: _formKey,
+      nipController: nipController,
+      tujuanController: tujuanController,
+      showTujuan: isFirstSignature, // Kirim status logic pertama/bukan
+      totalPages: _pageImages.length,
+      accessToken: widget.accessToken, // Kirim Access Token
+    );
+
+    // 4. Proses Hasil
+    if (result != null && result['sign_token'] != null) {
+      Offset initialPosition;
+
+      if (_pdfPageBoundsOnScreen != null) {
+        final boundary = _pdfPageBoundsOnScreen!;
+        initialPosition = Offset(
+          boundary.left + (boundary.width / 2) - (_initialQrSize / 2),
+          boundary.top + (boundary.height / 2) - (_initialQrSize / 2),
+        );
+
+        // Clamp agar tidak keluar batas
+        initialPosition = Offset(
+          initialPosition.dx.clamp(
+            boundary.left,
+            boundary.right - _initialQrSize,
+          ),
+          initialPosition.dy.clamp(
+            boundary.top,
+            boundary.bottom - _initialQrSize,
+          ),
+        );
+      } else {
+        final viewSize = MediaQuery.of(context).size;
+        initialPosition = Offset(
+          viewSize.width / 2 - _initialQrSize / 2,
+          viewSize.height / 3,
+        );
+      }
+
+      _activeQrNotifier.value = {
+        'sign_token': result['sign_token'],
+        'selected_page':
+            selectedPageNumber, // Set halaman berdasarkan halaman yg dilihat user
+        'position': initialPosition,
+        'size': _initialQrSize,
+        'locked': false,
+      };
+    }
+  }
+
   Future<void> _saveActiveQrToPdf() async {
     if (_activeQrNotifier.value == null || _isProcessing) return;
     setState(() => _isProcessing = true);
@@ -257,6 +332,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       await File(tempPath).rename(_currentPdfPath);
 
       setState(() {
+        // Tambahkan ke list qrCodes agar logika showTujuan berjalan benar
         qrCodes.add({...qrToSave, 'locked': true});
         _activeQrNotifier.value = null;
         _isLoadingPdf = true;
@@ -276,11 +352,125 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     }
   }
 
+  Future<void> _sendDocument() async {
+    try {
+      setState(() => _isSending = true);
+
+      // PANGGIL FUNGSI DARI API YANG BARU DIPERBAIKI
+      await replaceDocument(
+        accessToken: widget.accessToken,
+        filePath: _currentPdfPath,
+      );
+
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('Dokumen berhasil dikirim!')),
+      );
+
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardPage()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
+  Future<void> _cancelDocumentDirect() async {
+    setState(() => _isProcessing = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString("token");
+
+      if (token == null) throw Exception("Token tidak ditemukan");
+
+      // Menggunakan widget.accessToken
+      final url = Uri.parse('$baseUrl/documents/cancel/${widget.accessToken}');
+      final response = await http.post(
+        url,
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Text(data['message']),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const DashboardPage()),
+            (route) => false,
+          );
+        }
+      } else {
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text(data['message']), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  Future<void> _showCancelConfirmationDialog() async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Batalkan Dokumen'),
+        content: const Text('Yakin ingin membatalkan dokumen ini?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Tidak'),
+          ),
+          TextButton(
+            onPressed: _isProcessing
+                ? null
+                : () {
+                    Navigator.of(context).pop();
+                    _cancelDocumentDirect();
+                  },
+            child: _isProcessing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Ya, Batalkan'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       key: scaffoldMessengerKey,
-      appBar: _buildAppBar(),
+      appBar: AppBar(
+        title: const Text(
+          'Edit & Tanda Tangan',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFF172B4C),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+      ),
       body: _isLoadingPdf
           ? const Center(child: CircularProgressIndicator())
           : Stack(
@@ -315,7 +505,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                   },
                 ),
 
-                // QR sementara
                 ValueListenableBuilder<Map<String, dynamic>?>(
                   valueListenable: _activeQrNotifier,
                   builder: (context, activeQr, child) {
@@ -357,7 +546,59 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                     child: const Center(child: CircularProgressIndicator()),
                   ),
 
-                _buildBottomNavigation(),
+                Align(
+                  alignment: Alignment.bottomCenter,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(30),
+                      topRight: Radius.circular(30),
+                    ),
+                    child: Container(
+                      height: 60,
+                      color: const Color(0xFF172B4C),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.arrow_back_outlined,
+                                color: Color(0xFF172B4C),
+                              ),
+                              onPressed: _showCancelConfirmationDialog,
+                            ),
+                          ),
+                          if (_activeQrNotifier.value == null &&
+                              qrCodes.isNotEmpty)
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                              child: _isSending
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : IconButton(
+                                      icon: const Icon(
+                                        Icons.send,
+                                        color: Colors.white,
+                                      ),
+                                      onPressed: _sendDocument,
+                                    ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
       floatingActionButton: ValueListenableBuilder<Map<String, dynamic>?>(
@@ -396,278 +637,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       ),
     );
   }
-
-  final TextEditingController nipController = TextEditingController();
-  final TextEditingController tujuanController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-
-  AppBar _buildAppBar() => AppBar(
-    title: const Text(
-      'Edit & Tanda Tangan',
-      style: TextStyle(color: Colors.white),
-    ),
-    backgroundColor: const Color(0xFF172B4C),
-    centerTitle: true,
-    automaticallyImplyLeading: false,
-  );
-
-  Widget _buildBottomNavigation() {
-    final canSend = _activeQrNotifier.value == null && qrCodes.isNotEmpty;
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: ClipRRect(
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(30),
-          topRight: Radius.circular(30),
-        ),
-        child: Container(
-          height: 60,
-          color: const Color(0xFF172B4C),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [_buildBackButton(), if (canSend) _buildSendButton()],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackButton() => Container(
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(15),
-    ),
-    child: IconButton(
-      icon: const Icon(Icons.arrow_back_outlined, color: Color(0xFF172B4C)),
-      onPressed: _showCancelConfirmationDialog,
-    ),
-  );
-
-  Widget _buildSendButton() => Container(
-    decoration: BoxDecoration(
-      color: Colors.green,
-      borderRadius: BorderRadius.circular(15),
-    ),
-    child: _isSending
-        ? const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: CircularProgressIndicator(color: Colors.white),
-          )
-        : IconButton(
-            icon: const Icon(Icons.send, color: Colors.white),
-            onPressed: _sendDocument,
-          ),
-  );
-
-  // ==============================================================
-  // TAMBAH QR BARU
-  // ==============================================================
-
-  void _addNewQrCode() async {
-    if (_activeQrNotifier.value != null) {
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(content: Text('Selesaikan tanda tangan yang ada dulu.')),
-      );
-      return;
-    }
-
-    final totalPages = _pageImages.length;
-
-    final result = await showInputDialog(
-      context: context,
-      formKey: _formKey,
-      nipController: nipController,
-      tujuanController: tujuanController,
-      showTujuan: true,
-      totalPages: totalPages,
-      documentId: widget.documentId,
-    );
-
-    if (result != null && result['sign_token'] != null) {
-      Offset initialPosition;
-
-      if (_pdfPageBoundsOnScreen != null) {
-        final boundary = _pdfPageBoundsOnScreen!;
-        final double centerX = boundary.left + (boundary.width / 2);
-        final double centerY = boundary.top + (boundary.height / 2);
-
-        initialPosition = Offset(
-          centerX - (_initialQrSize / 2),
-          centerY - (_initialQrSize / 2),
-        );
-
-        initialPosition = Offset(
-          initialPosition.dx.clamp(
-            boundary.left,
-            boundary.right - _initialQrSize,
-          ),
-          initialPosition.dy.clamp(
-            boundary.top,
-            boundary.bottom - _initialQrSize,
-          ),
-        );
-      } else {
-        final viewSize = MediaQuery.of(context).size;
-        initialPosition = Offset(
-          viewSize.width / 2 - _initialQrSize / 2,
-          viewSize.height / 3,
-        );
-      }
-
-      _activeQrNotifier.value = {
-        'sign_token': result['sign_token'],
-        'selected_page': result['selected_page'],
-        'position': initialPosition,
-        'size': _initialQrSize,
-        'locked': false,
-      };
-
-      final targetPage = (result['selected_page'] as int) - 1;
-
-      if (targetPage >= 0 && targetPage < totalPages) {
-        if (_pageController.page?.round() != targetPage) {
-          _pageController.jumpToPage(targetPage);
-        }
-      }
-    }
-  }
-
-  // ==============================================================
-  // KIRIM DOKUMEN KE SERVER
-  // ==============================================================
-
-  Future<void> _sendDocument() async {
-    try {
-      setState(() => _isSending = true);
-
-      final prefs = await SharedPreferences.getInstance();
-      final authToken = prefs.getString('token');
-
-      if (authToken == null) throw Exception('Token tidak valid');
-
-      final uri = Uri.parse('$baseUrl/documents/replace/${widget.documentId}');
-
-      var request = http.MultipartRequest('POST', uri);
-      request.headers['Authorization'] = 'Bearer $authToken';
-
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'pdf',
-          _currentPdfPath,
-          contentType: MediaType('application', 'pdf'),
-        ),
-      );
-
-      var response = await request.send();
-      var responseBody = await response.stream.bytesToString();
-
-      if (response.statusCode == 200) {
-        scaffoldMessengerKey.currentState?.showSnackBar(
-          const SnackBar(content: Text('Dokumen berhasil dikirim!')),
-        );
-        if (mounted) {
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const DashboardPage()),
-            (route) => false,
-          );
-        }
-      } else {
-        throw Exception(jsonDecode(responseBody)['message']);
-      }
-    } catch (e) {
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _isSending = false);
-    }
-  }
-
-  // ==============================================================
-  // KONFIRMASI BATALKAN DOKUMEN
-  // ==============================================================
-
-  Future<void> _showCancelConfirmationDialog() async {
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Batalkan Dokumen'),
-        content: const Text('Yakin ingin membatalkan dokumen ini?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Tidak'),
-          ),
-          TextButton(
-            onPressed: _isProcessing
-                ? null
-                : () {
-                    Navigator.of(context).pop();
-                    _cancelDocumentDirect();
-                  },
-            child: _isProcessing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Ya, Batalkan'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==============================================================
-  // BATALKAN DOKUMEN (Direct HTTP, tanpa Bloc)
-  // ==============================================================
-
-  Future<void> _cancelDocumentDirect() async {
-    setState(() => _isProcessing = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString("token");
-
-      if (token == null) throw Exception("Token tidak ditemukan");
-
-      final url = Uri.parse('$baseUrl/documents/cancel/${widget.documentId}');
-      final response = await http.post(
-        url,
-        headers: {'Authorization': 'Bearer $token'},
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200) {
-        scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(
-            content: Text(data['message']),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        if (mounted) {
-          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const DashboardPage()),
-            (route) => false,
-          );
-        }
-      } else {
-        scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(content: Text(data['message']), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    } finally {
-      if (mounted) setState(() => _isProcessing = false);
-    }
-  }
 }
 
+// ==========================================================
+// CLASS RESIZABLE QR CODE
+// ==========================================================
 class ResizableQrCode extends StatefulWidget {
   final Map<String, dynamic> qrData;
   final BoxConstraints constraints;
@@ -773,3 +747,7 @@ class _ResizableQrCodeState extends State<ResizableQrCode> {
     );
   }
 }
+
+// ==========================================================
+// DIALOG INPUT (DIPERBAIKI)
+// ==========================================================

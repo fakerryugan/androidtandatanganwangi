@@ -19,29 +19,26 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
     on<CancelDocumentRequested>(_onCancelDocumentRequested);
   }
 
+  // --- HELPER FILTERING ---
   List<Map<String, dynamic>> _filterDocuments({
     required List<Map<String, dynamic>> allDocs,
     required String status,
     required String query,
   }) {
     final lowerQuery = query.toLowerCase().trim();
-    // Jika query tidak kosong, aktifkan mode SEARCHING (Abaikan Tab Status)
     final isSearching = lowerQuery.isNotEmpty;
 
     return allDocs.where((doc) {
-      // 1. Cek Nama File
       final originalNameRaw = doc['original_name'];
       final nameStr = (originalNameRaw != null)
           ? originalNameRaw.toString().toLowerCase()
           : '';
       final bool queryMatch = nameStr.contains(lowerQuery);
 
-      // JIKA SEDANG MENCARI: Return hasil match nama saja (Cari di semua tab)
       if (isSearching) {
         return queryMatch;
       }
 
-      // JIKA TIDAK MENCARI: Filter berdasarkan Tab Status
       final docStatusRaw = doc['status'];
       final docStatus = (docStatusRaw != null)
           ? docStatusRaw.toString()
@@ -56,6 +53,8 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
       return docStatus == status;
     }).toList();
   }
+
+  // --- HANDLERS ---
 
   Future<void> _onLoadAllUserFiles(
     LoadAllUserFiles event,
@@ -86,8 +85,6 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
   void _onSearchFiles(SearchFiles event, Emitter<FilesState> emit) {
     if (state is FilesLoaded) {
       final currentState = state as FilesLoaded;
-
-      // Pindah visual tab ke 'Semua' jika sedang mencari
       final targetStatus = event.query.isNotEmpty
           ? 'Semua'
           : currentState.selectedStatus;
@@ -114,7 +111,6 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
   ) {
     if (state is FilesLoaded) {
       final currentState = state as FilesLoaded;
-
       final filtered = _filterDocuments(
         allDocs: currentState.allDocuments,
         status: event.status,
@@ -131,7 +127,7 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
   }
 
   Future<void> _onShareFile(ShareFile event, Emitter<FilesState> emit) async {
-    final currentState = state; // Simpan state agar list tidak hilang
+    final currentState = state;
     try {
       final tempFilePath = await _repository.prepareTempFile(
         accessToken: event.accessToken,
@@ -140,7 +136,6 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
       );
       emit(FileReadyForSharing(tempFilePath, event.originalName));
 
-      // Restore State agar UI kembali normal setelah share muncul
       if (currentState is FilesLoaded) emit(currentState);
     } catch (e) {
       emit(FileShareFailure('Gagal: ${e.toString()}'));
@@ -152,22 +147,34 @@ class FilesBloc extends Bloc<FilesEvent, FilesState> {
     CancelDocumentRequested event,
     Emitter<FilesState> emit,
   ) async {
-    final currentState = state; // Simpan state
+    final currentState = state;
+
+    // 1. EMIT LOADING DULU
+    emit(const FileCancelProcessing('Sedang memproses pembatalan...'));
+
     try {
-      final response = await _repository.cancelDocument(event.documentId);
+      final response = await _repository.cancelDocument(
+        event.accessToken,
+        reason: event.reason,
+      );
 
       if (response['action'] == 'cancellation_request_sent') {
+        // 2. EMIT SUKSES REQUEST (Permintaan terkirim)
         emit(
           FileCancelRequestSent(
-            response['message'] ?? 'Permintaan terkirim.',
+            response['message'] ?? 'Permintaan pembatalan berhasil dikirim.',
             fileName: response['fileName'],
           ),
         );
+        // Restore list dokumen
         if (currentState is FilesLoaded) emit(currentState);
       } else {
+        // 3. EMIT SUKSES HAPUS (Langsung terhapus)
         emit(FileCancelSuccess(response['message'] ?? 'Berhasil.'));
+        add(LoadAllFiles());
       }
     } catch (e) {
+      // 4. EMIT GAGAL
       emit(FileCancelFailure(e.toString().replaceAll('Exception: ', '')));
       if (currentState is FilesLoaded) emit(currentState);
     }

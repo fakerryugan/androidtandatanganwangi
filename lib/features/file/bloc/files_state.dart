@@ -73,7 +73,7 @@ class FilesError extends FilesState {
   List<Object?> get props => [message];
 }
 
-// --- STATE BARU UNTUK PROSES CANCEL ---
+// --- STATE UNTUK CANCEL ---
 
 class FileCancelProcessing extends FilesState {
   final String fileName;
@@ -91,12 +91,11 @@ class FileCancelSuccess extends FilesState {
   List<Object> get props => [message];
 }
 
-// PERBAIKAN DISINI:
 class FileCancelRequestSent extends FilesState {
   final String message;
-  final String? fileName; // Ubah jadi nullable (opsional)
+  final String? fileName;
 
-  // Perbaikan Constructor: Menghapus 'this.this' dan menggunakan named parameter optional
+  // PERBAIKAN DI SINI: Hapus 'this.' yang berlebihan
   const FileCancelRequestSent(this.message, {this.fileName});
 
   @override

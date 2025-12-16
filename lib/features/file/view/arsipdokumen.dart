@@ -40,6 +40,7 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
     // Jangan rebuild List/Filter agar tampilan tidak blank.
     if (current is FileReadyForSharing ||
         current is FileShareFailure ||
+        current is FileCancelProcessing || // Tambahkan ini
         current is FileCancelRequestSent ||
         current is FileCancelSuccess ||
         current is FileCancelFailure) {
@@ -124,6 +125,7 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
 
   // --- DIALOGS ---
 
+  // --- DIALOG PEMBATALAN DENGAN ALASAN ---
   void _showCancelConfirmationDialog(
     BuildContext pageContext,
     BuildContext bottomSheetContext,
@@ -131,22 +133,41 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
   ) {
     Navigator.of(bottomSheetContext).pop(); // Tutup Bottom Sheet
 
-    // Logic Hapus vs Batalkan
     final String status = file['status'] ?? '';
     final bool isRejected = status == 'Ditolak';
+
+    // Cek apakah sudah ada yang approve?
+    final List<dynamic> recipients = file['recipients'] ?? [];
+    final bool hasApprovals = recipients.any((r) {
+      if (r is Map<String, dynamic>) {
+        final s = (r['status'] as String?)?.toLowerCase() ?? '';
+        return s == 'approved' || s == 'disetujui';
+      }
+      return false;
+    });
+
+    // Kondisi Wajib Alasan: Jika BUKAN ditolak DAN (sudah ada yang approve)
+    final bool requireReason = !isRejected && hasApprovals;
 
     final String dialogTitle = isRejected
         ? 'Hapus Dokumen?'
         : 'Batalkan Dokumen?';
 
-    final String dialogBody = isRejected
-        ? 'Apakah Anda yakin ingin menghapus permanen "${file['original_name']}"?\n\n'
-              'Dokumen yang ditolak dan dihapus tidak dapat dikembalikan.'
-        : 'Apakah Anda yakin ingin membatalkan "${file['original_name']}"?\n\n'
-              'Jika belum ada yang menyetujui, dokumen akan diarsipkan. '
-              'Jika sudah ada, permintaan pembatalan akan dikirim.';
+    String dialogBodyText = isRejected
+        ? 'Apakah Anda yakin ingin menghapus permanen "${file['original_name']}"?\n\nDokumen yang ditolak dan dihapus tidak dapat dikembalikan.'
+        : 'Apakah Anda yakin ingin membatalkan "${file['original_name']}"?';
+
+    if (!isRejected && hasApprovals) {
+      dialogBodyText +=
+          '\n\nDokumen ini sudah disetujui oleh beberapa pihak. Anda wajib memberikan alasan pembatalan.';
+    } else if (!isRejected) {
+      dialogBodyText +=
+          '\n\nJika belum ada yang menyetujui, dokumen akan langsung diarsipkan.';
+    }
 
     final String confirmButtonLabel = isRejected ? 'HAPUS' : 'YA, BATALKAN';
+    final TextEditingController reasonController = TextEditingController();
+    final GlobalKey<FormState> formKey = GlobalKey<FormState>();
 
     showGeneralDialog(
       context: pageContext,
@@ -169,62 +190,108 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
             constraints: const BoxConstraints(maxWidth: 500),
             child: Padding(
               padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    dialogTitle,
-                    style: Theme.of(dialogContext).textTheme.titleLarge
-                        ?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: isRejected ? Colors.red : Colors.black87,
-                        ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    dialogBody,
-                    style: Theme.of(dialogContext).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.grey.shade700,
-                        ),
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        child: const Text('TUTUP'),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red.shade700,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dialogTitle,
+                      style: Theme.of(dialogContext).textTheme.titleLarge
+                          ?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: isRejected ? Colors.red : Colors.black87,
                           ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop();
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      dialogBodyText,
+                      style: Theme.of(dialogContext).textTheme.bodyMedium,
+                    ),
 
-                          final int? documentId = file['id'] as int?;
-                          if (documentId != null) {
-                            pageContext.read<FilesBloc>().add(
-                              CancelDocumentRequested(documentId),
-                            );
+                    // --- INPUT ALASAN (Hanya Muncul Jika Diperlukan) ---
+                    if (requireReason) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: reasonController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Alasan Pembatalan',
+                          border: OutlineInputBorder(),
+                          hintText: 'Contoh: Ada kesalahan pada isi dokumen...',
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Alasan wajib diisi';
                           }
+                          return null;
                         },
-                        child: Text(confirmButtonLabel),
                       ),
                     ],
-                  ),
-                ],
+
+                    // ---------------------------------------------------
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.grey.shade700,
+                          ),
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: const Text('TUTUP'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade700,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: () {
+                            // Validasi form sebelum submit
+                            if (requireReason &&
+                                !formKey.currentState!.validate()) {
+                              return;
+                            }
+
+                            Navigator.of(dialogContext).pop();
+
+                            final String? accessToken =
+                                file['access_token'] as String?;
+                            final String reason = reasonController.text.trim();
+
+                            if (accessToken != null) {
+                              pageContext.read<FilesBloc>().add(
+                                CancelDocumentRequested(
+                                  accessToken,
+                                  reason: requireReason ? reason : null,
+                                ),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(pageContext).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    "Gagal: Access Token tidak ditemukan",
+                                  ),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          },
+                          child: Text(confirmButtonLabel),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -254,8 +321,12 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
 
   void _showActionMenu(BuildContext pageContext, Map<String, dynamic> file) {
     final String status = file['status'] ?? 'Pending';
+    // Logic: Kalau verified/approved, bisa share. Kalau cancellation_requested (req batal), gak bisa cancel lagi.
     final bool canShare = (status == 'Diverifikasi' || status == 'Disetujui');
-    final bool canCancel = (status != 'Diverifikasi' && status != 'Disetujui');
+    final bool canCancel =
+        (status != 'Diverifikasi' &&
+        status != 'Disetujui' &&
+        status != 'cancellation_requested');
 
     showModalBottomSheet(
       context: pageContext,
@@ -335,20 +406,36 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
             ..add(LoadAllFiles()),
       child: BlocListener<FilesBloc, FilesState>(
         listener: (context, state) {
-          if (state is FileCancelRequestSent) {
+          // 1. LOADING START
+          if (state is FileCancelProcessing) {
             _showStatusDialog(
               context,
-              'Permintaan pembatalan untuk "${state.fileName ?? 'Dokumen'}" dikirim...',
+              state.fileName, // "Sedang memproses..."
               StatusType.loading,
             );
-          } else if (state is FileCancelSuccess) {
-            // Tutup Loading Dialog
+          }
+          // 2. REQUEST TERKIRIM (KASUS SUDAH ADA SIGNER)
+          else if (state is FileCancelRequestSent) {
+            // Tutup Loading Dialog Dulu
+            Navigator.of(context, rootNavigator: true).pop();
+
+            // Tampilkan Info Sukses Mengirim Request
+            _showStatusDialog(
+              context,
+              state.message, // "Permintaan pembatalan dikirim..."
+              StatusType.success, // Gunakan icon centang hijau/info
+            );
+            // Refresh list agar status berubah jadi 'Req Batal'
+            context.read<FilesBloc>().add(LoadAllFiles());
+          }
+          // 3. BERHASIL DIHAPUS LANGSUNG (KASUS BELUM ADA SIGNER)
+          else if (state is FileCancelSuccess) {
             Navigator.of(context, rootNavigator: true).pop();
             _showStatusDialog(context, state.message, StatusType.success);
-            // Refresh data otomatis
             context.read<FilesBloc>().add(LoadAllFiles());
-          } else if (state is FileCancelFailure) {
-            // Tutup Loading Dialog
+          }
+          // 4. GAGAL
+          else if (state is FileCancelFailure) {
             Navigator.of(context, rootNavigator: true).pop();
             _showStatusDialog(context, state.message, StatusType.failure);
           } else if (state is FileReadyForSharing) {
@@ -385,7 +472,7 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
                 children: [
                   const SizedBox(height: 12),
 
-                  // --- SEARCH BAR (TANPA TIMER AGAR LEBIH RESPONSIF) ---
+                  // --- SEARCH BAR ---
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -401,9 +488,7 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
                         Expanded(
                           child: TextField(
                             controller: _searchController,
-                            // MENGHAPUS TIMER: Langsung kirim event saat mengetik
                             onChanged: (query) {
-                              print("Ketik: $query"); // Debug Print
                               context.read<FilesBloc>().add(SearchFiles(query));
                             },
                             decoration: const InputDecoration(
@@ -432,7 +517,6 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
                               icon: const Icon(Icons.close, color: Colors.grey),
                               onPressed: () {
                                 _searchController.clear();
-                                // Reset search di Bloc
                                 context.read<FilesBloc>().add(
                                   const SearchFiles(''),
                                 );
@@ -447,7 +531,6 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
 
                   // --- FILTER CHIPS ---
                   BlocBuilder<FilesBloc, FilesState>(
-                    // PENTING: buildWhen mencegah UI hilang saat Share
                     buildWhen: _shouldRebuild,
                     builder: (context, state) {
                       final selectedStatus = (state is FilesLoaded)
@@ -532,7 +615,6 @@ class _ArsipDokumenPageState extends State<ArsipDokumenPage> {
                       ),
                       width: double.infinity,
                       child: BlocBuilder<FilesBloc, FilesState>(
-                        // PENTING: buildWhen mencegah UI hilang saat Share
                         buildWhen: _shouldRebuild,
                         builder: (context, state) {
                           if (state is FilesLoading) {
@@ -699,6 +781,17 @@ class _DocumentCard extends StatelessWidget {
               'Status: Ditolak\nDiunggah: ${pageState.formatDate(file['uploaded_at'])}';
         }
         break;
+
+      // --- STATE BARU: REQ BATAL ---
+      case 'cancellation_requested':
+        leadingIcon = const Icon(
+          Icons.warning_amber_rounded,
+          color: Colors.orange,
+          size: 24,
+        );
+        subtitle = 'Status: Menunggu persetujuan pembatalan dari pihak lain.';
+        break;
+      // -----------------------------
 
       case 'Pending':
       default:
@@ -867,6 +960,12 @@ class _DetailDokumenDialog extends StatelessWidget {
         label = 'Ditolak';
         bgColor = Colors.red;
         break;
+      // --- TAMBAHKAN INI DI DIALOG JUGA ---
+      case 'cancellation_requested':
+        label = 'Req Batal';
+        bgColor = Colors.orange;
+        break;
+      // ------------------------------------
       case 'Pending':
       default:
         label = 'Proses';

@@ -105,7 +105,7 @@ Future<http.Response?> downloadDocument(
 }
 
 Future<Map<String, dynamic>> uploadDocument(File file) async {
-  final token = await getToken();
+  final token = await getToken(); // Token Login User
   if (token == null) throw Exception('Token tidak ditemukan');
 
   try {
@@ -119,16 +119,17 @@ Future<Map<String, dynamic>> uploadDocument(File file) async {
     final data = json.decode(responseBody);
 
     if (response.statusCode == 200) {
-      // Save document_id to SharedPreferences
-      if (data['document_id'] != null) {
+      // PERBAIKAN: API Laravel mengembalikan key 'access_token', bukan 'document_id'
+      if (data['access_token'] != null) {
+        // Simpan token dokumen ini (bisa digunakan sebagai ID dokumen sementara)
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt('document_id', data['document_id']);
+        await prefs.setString('current_document_token', data['access_token']);
       }
 
       return {
         'success': true,
-        'document_id': data['document_id'],
-        'file_path': data['file_path'] ?? '',
+        // Kita kembalikan access_token karena ini satu-satunya ID yang dikasih server
+        'access_token': data['access_token'],
         'message': data['message'] ?? 'Upload berhasil',
       };
     } else {
@@ -142,22 +143,28 @@ Future<Map<String, dynamic>> uploadDocument(File file) async {
 }
 
 Future<Map<String, dynamic>> uploadSigner({
-  required int documentId,
+  required String accessToken, // Ini adalah Token Dokumen (UUID)
   required String nip,
   String? alasan,
 }) async {
-  final token = await getToken();
+  final token = await getToken(); // Ini Token Login User
   if (token == null) throw Exception('Token tidak ditemukan');
 
   try {
-    final url = Uri.parse('$baseUrl/add/$documentId');
+    // URL sudah benar menggunakan accessToken dokumen
+    final url = Uri.parse('$baseUrl/documents/$accessToken/signer');
+
     final headers = {
       'Authorization': 'Bearer $token',
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     };
 
-    final body = {'nip': nip, if (alasan != null) 'alasan': alasan};
+    // PERBAIKAN: Key harus 'tujuan' sesuai dengan $request->tujuan di Laravel
+    final body = {
+      'nip': nip,
+      if (alasan != null) 'tujuan': alasan, // Ubah key 'alasan' jadi 'tujuan'
+    };
 
     final response = await http.post(
       url,
@@ -175,6 +182,7 @@ Future<Map<String, dynamic>> uploadSigner({
         'message': 'Penandatangan berhasil ditambahkan',
       };
     } else {
+      // Handle jika user sudah ada (409) atau error lain
       throw Exception(
         responseData['message'] ?? 'Gagal menambahkan penandatangan',
       );
@@ -185,24 +193,28 @@ Future<Map<String, dynamic>> uploadSigner({
 }
 
 Future<Map<String, dynamic>> replaceDocument({
-  required int documentId,
+  required String accessToken, // UBAH: Gunakan String Access Token
   required String filePath,
 }) async {
   final token = await getToken();
   if (token == null) throw Exception('Token tidak ditemukan');
 
   try {
-    var uri = Uri.parse('$baseUrl/documents/replace/$documentId');
+    // Pastikan URL endpoint sesuai dengan route Laravel Anda
+    // Biasanya: /api/documents/replace/{accessToken}
+    var uri = Uri.parse('$baseUrl/documents/replace/$accessToken');
+
     var request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $token'
-      ..headers['Accept'] = 'application/json'
-      ..files.add(
-        await http.MultipartFile.fromPath(
-          'pdf',
-          filePath,
-          contentType: MediaType('application', 'pdf'),
-        ),
-      );
+      ..headers['Accept'] = 'application/json';
+
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'pdf',
+        filePath,
+        contentType: MediaType('application', 'pdf'),
+      ),
+    );
 
     var response = await request.send();
     final responseBody = await response.stream.bytesToString();
@@ -212,13 +224,13 @@ Future<Map<String, dynamic>> replaceDocument({
       return {
         'success': true,
         'message': data['message'] ?? 'Dokumen berhasil dikirim!',
+        'document_id':
+            data['document_id'], // Opsional, jika backend mengembalikan ID
       };
     } else {
-      // Jika gagal, lemparkan Exception dengan pesan error dari server
       throw Exception(data['message'] ?? 'Gagal mengirim dokumen');
     }
   } catch (e) {
-    // Tangkap error lain (misal: jaringan) dan lemparkan kembali
     throw Exception('Error saat mengganti dokumen: ${e.toString()}');
   }
 }

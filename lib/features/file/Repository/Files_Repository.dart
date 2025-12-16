@@ -28,13 +28,18 @@ class FilesRepository {
     }
   }
 
-  Future<Map<String, dynamic>> cancelDocument(int documentId) async {
+  Future<Map<String, dynamic>> cancelDocument(
+    String accessToken, {
+    String? reason,
+  }) async {
     try {
-      // Panggil metode cancelDocument dari ApiService
-      final response = await _apiService.cancelDocument(documentId);
+      // Meneruskan parameter reason ke ApiService
+      final response = await _apiService.cancelDocument(
+        accessToken,
+        reason: reason,
+      );
       return response;
     } catch (e) {
-      // Teruskan error agar BLoC/UI bisa menangkapnya
       throw Exception('Gagal membatalkan dokumen: $e');
     }
   }

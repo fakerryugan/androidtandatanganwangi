@@ -7,7 +7,7 @@ import 'package:android/features/filereview/view/pdf_archive_review_screen.dart'
 import 'package:android/upload_file/upload.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // WAJIB: Tambahkan ini
+// import 'package:shared_preferences/shared_preferences.dart'; // Tidak lagi dibutuhkan di sini
 import '../bloc/dashboard_bloc.dart';
 
 class MenuHome extends StatelessWidget {
@@ -18,22 +18,24 @@ class MenuHome extends StatelessWidget {
     BuildContext context,
     Map<String, dynamic> file,
   ) async {
-    // 1. AMBIL TOKEN DARI PENYIMPANAN HP (Bukan dari file map)
-    final prefs = await SharedPreferences.getInstance();
-    // Pastikan key 'token' sesuai dengan yang Anda pakai saat Login (lihat ApiServiceImpl)
-    final String? accessToken = prefs.getString('token');
-
-    // 2. Ambil Data File
-    final encryptedName = file['encrypted_original_filename'] as String?;
-    final originalName = file['original_name'] as String?;
+    // 1. AMBIL DATA DARI LIST FILE
+    // Gunakan access_token milik dokumen, BUKAN token user login.
+    final String? documentAccessToken = file['access_token'] as String?;
+    final String? encryptedName =
+        file['encrypted_original_filename'] as String?;
+    final String? originalName = file['original_name'] as String?;
     final String status = file['status'] as String? ?? 'Pending';
 
-    // 3. Validasi Data
-    if (accessToken == null || encryptedName == null || originalName == null) {
+    // 2. VALIDASI DATA
+    if (documentAccessToken == null ||
+        encryptedName == null ||
+        originalName == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Gagal: Token atau Data Dokumen tidak ditemukan.'),
+            content: Text(
+              'Gagal: Data Dokumen tidak lengkap (Token/File hilang).',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -41,11 +43,12 @@ class MenuHome extends StatelessWidget {
       return;
     }
 
-    // 4. Tentukan Logika Verified (Boleh Share atau Tidak)
+    // 3. LOGIKA VERIFIKASI
+    // Jika status Verified/Approved, user mungkin punya akses lebih di halaman review
     final bool isVerifiedDocument =
         (status == 'Diverifikasi' || status == 'Disetujui');
 
-    // 5. Tampilkan Notifikasi Kecil
+    // 4. NAVIGASI
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -55,15 +58,15 @@ class MenuHome extends StatelessWidget {
         ),
       );
 
-      // 6. Navigasi Langsung ke PdfArchiveReviewScreen
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => PdfArchiveReviewScreen(
-            accessToken: accessToken, // Token yang benar dari SharedPreferences
+            // Kirim Token Dokumen yang benar
+            accessToken: documentAccessToken,
             encryptedName: encryptedName,
             originalName: originalName,
-            isVerified: isVerifiedDocument, // Kirim status verified
+            isVerified: isVerifiedDocument,
           ),
         ),
       );
@@ -228,7 +231,7 @@ class MenuHome extends StatelessWidget {
                                               context,
                                               MaterialPageRoute(
                                                 builder: (context) =>
-                                                    ArsipDokumenPage(),
+                                                    const ArsipDokumenPage(),
                                               ),
                                             );
                                           },
@@ -245,7 +248,7 @@ class MenuHome extends StatelessWidget {
                                               context,
                                               MaterialPageRoute(
                                                 builder: (context) =>
-                                                    FileReviewMainPage(),
+                                                    const FileReviewMainPage(),
                                               ),
                                             );
                                           },

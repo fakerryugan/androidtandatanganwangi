@@ -22,16 +22,26 @@ abstract class ApiService {
     String originalName,
   );
   Future<Map<String, dynamic>> uploadDocument(File file);
-  Future<Map<String, dynamic>> cancelDocument(int documentId);
+
+  // --- PERUBAHAN 1: documentId (int) -> accessToken (String) ---
+  Future<Map<String, dynamic>> cancelDocument(
+    String accessToken, {
+    String? reason,
+  });
+
+  // --- PERUBAHAN 2: documentId (int) -> accessToken (String) ---
   Future<Map<String, dynamic>> uploadSigner({
-    required int documentId,
+    required String accessToken,
     required String nip,
     String? alasan,
   });
+
+  // --- PERUBAHAN 3: documentId (int) -> accessToken (String) ---
   Future<Map<String, dynamic>> replaceDocument({
-    required int documentId,
+    required String accessToken,
     required String filePath,
   });
+
   Future<List<Map<String, dynamic>>> fetchVerificationDocuments();
   Future<File> downloadReviewPdf(String accessToken, String documentId);
   Future<Map<String, dynamic>> processSignature(
@@ -44,7 +54,6 @@ abstract class ApiService {
     String originalName,
   );
 
-  // --- BARU: Metode untuk mengambil dokumen penolakan ---
   Future<List<Map<String, dynamic>>> fetchRejectionDocuments();
   Future<bool> approveCancellation(String signToken);
 }
@@ -181,26 +190,41 @@ class ApiServiceImpl implements ApiService {
     }
   }
 
+  // --- PERUBAHAN 1: Menggunakan Access Token ---
   @override
-  Future<Map<String, dynamic>> cancelDocument(int documentId) async {
+  // --- PERUBAHAN: Tambahkan parameter 'data' pada request delete ---
+  @override
+  Future<Map<String, dynamic>> cancelDocument(
+    String accessToken, {
+    String? reason,
+  }) async {
     try {
-      final response = await _dio.delete('/documents/cancel/$documentId');
+      // URL disesuaikan: /documents/cancel/{accessToken}
+      // Kita kirim 'reason' di dalam body JSON jika ada
+      final response = await _dio.delete(
+        '/documents/cancel/$accessToken',
+        data: reason != null ? {'reason': reason} : null,
+      );
+
       return {'success': true, ...response.data};
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
   }
 
+  // --- PERUBAHAN 2: Menggunakan Access Token ---
   @override
   Future<Map<String, dynamic>> uploadSigner({
-    required int documentId,
+    required String accessToken,
     required String nip,
     String? alasan,
   }) async {
     try {
+      // URL disesuaikan: /add/{accessToken}
       final response = await _dio.post(
-        '/add/$documentId',
-        data: {'nip': nip, if (alasan != null) 'alasan': alasan},
+        '/add/$accessToken',
+        // Mengirim 'tujuan' jika 'alasan' diisi (mapping sesuai backend Laravel)
+        data: {'nip': nip, if (alasan != null) 'tujuan': alasan},
       );
       return {'success': true, ...response.data};
     } on DioException catch (e) {
@@ -208,9 +232,10 @@ class ApiServiceImpl implements ApiService {
     }
   }
 
+  // --- PERUBAHAN 3: Menggunakan Access Token ---
   @override
   Future<Map<String, dynamic>> replaceDocument({
-    required int documentId,
+    required String accessToken,
     required String filePath,
   }) async {
     try {
@@ -219,8 +244,9 @@ class ApiServiceImpl implements ApiService {
         'pdf': await MultipartFile.fromFile(filePath, filename: fileName),
       });
 
+      // URL disesuaikan: /documents/replace/{accessToken}
       final response = await _dio.post(
-        '/documents/replace/$documentId',
+        '/documents/replace/$accessToken',
         data: formData,
       );
       return {'success': true, ...response.data};
@@ -248,6 +274,7 @@ class ApiServiceImpl implements ApiService {
       );
 
       final dir = await getTemporaryDirectory();
+      // documentId di sini hanya digunakan untuk penamaan file lokal
       final file = File('${dir.path}/document_$documentId.pdf');
       await file.writeAsBytes(response.data);
       return file;
@@ -275,28 +302,22 @@ class ApiServiceImpl implements ApiService {
     }
   }
 
-  // --- IMPLEMENTASI BARU ---
   @override
   Future<List<Map<String, dynamic>>> fetchRejectionDocuments() async {
     try {
-      // Menggunakan rute baru dari file Laravel Anda
       final response = await _dio.get('/signatures/cancellation-requests');
-      // Asumsi struktur data sama dengan fetch lain (kunci 'documents')
       return List<Map<String, dynamic>>.from(response.data['documents'] ?? []);
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
   }
 
+  @override
   Future<bool> approveCancellation(String signToken) async {
     try {
-      // URL Base dan Token Auth sudah ditangani oleh _dio di constructor
       final response = await _dio.post(
         '/signatures/approve-cancellation/$signToken',
       );
-
-      // Dio biasanya melempar error jika status code bukan 2xx
-      // Jadi jika sampai sini, berarti sukses (200 OK)
       return response.statusCode == 200;
     } on DioException catch (e) {
       throw _handleDioError(e);

@@ -4,7 +4,7 @@ abstract class FilesEvent extends Equatable {
   const FilesEvent();
 
   @override
-  List<Object> get props => [];
+  List<Object?> get props => [];
 }
 
 class LoadAllUserFiles extends FilesEvent {}
@@ -14,7 +14,6 @@ class LoadAllFiles extends FilesEvent {}
 class SearchFiles extends FilesEvent {
   final String query;
   const SearchFiles(this.query);
-
   @override
   List<Object> get props => [query];
 }
@@ -22,13 +21,12 @@ class SearchFiles extends FilesEvent {
 class FilterFilesByStatus extends FilesEvent {
   final String status;
   const FilterFilesByStatus(this.status);
-
   @override
   List<Object> get props => [status];
 }
 
 class ShareFile extends FilesEvent {
-  final String accessToken;
+  final String accessToken; // String Access Token
   final String encryptedName;
   final String originalName;
 
@@ -43,9 +41,11 @@ class ShareFile extends FilesEvent {
 }
 
 class CancelDocumentRequested extends FilesEvent {
-  final int documentId;
-  const CancelDocumentRequested(this.documentId);
+  final String accessToken; // String Access Token
+  final String? reason; // Tambahan: Alasan pembatalan (opsional)
+
+  const CancelDocumentRequested(this.accessToken, {this.reason});
 
   @override
-  List<Object> get props => [documentId];
+  List<Object?> get props => [accessToken, reason];
 }

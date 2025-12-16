@@ -18,8 +18,12 @@ class FilePenolakanPage extends StatelessWidget {
     }
   }
 
-  // --- POP UP KONFIRMASI ---
+  // --- POP UP KONFIRMASI (DIPERBARUI) ---
   void _showConfirmationDialog(BuildContext context, Map<String, dynamic> doc) {
+    // Ambil data tambahan
+    final requestedBy = doc['diminta_batal_oleh'] ?? 'Seseorang';
+    final reason = doc['alasan_pembatalan'] ?? '-';
+
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -35,14 +39,50 @@ class FilePenolakanPage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Apakah Anda yakin ingin menyetujui permintaan ini?"),
+              const Text("Permintaan pembatalan dokumen:"),
               const SizedBox(height: 8),
               Text(
-                "Dokumen \"${doc['original_name'] ?? 'File'}\" akan dihapus secara permanen.",
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
+                "\"${doc['original_name'] ?? 'File'}\"",
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+
+              // --- TAMPILKAN INFO PEMBATALAN DI DIALOG ---
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.shade100),
                 ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Diminta oleh: $requestedBy",
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "Alasan: \"$reason\"",
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // -------------------------------------------
+              const SizedBox(height: 16),
+              const Text(
+                "Jika Anda setuju, dokumen ini akan dihapus secara permanen untuk semua pihak.",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
           ),
@@ -56,8 +96,6 @@ class FilePenolakanPage extends StatelessWidget {
               onPressed: () {
                 Navigator.pop(dialogContext); // Tutup dialog
 
-                // --- PERBAIKAN 1: AMBIL SIGN TOKEN, BUKAN ID ---
-                // Backend butuh token tanda tangan untuk verifikasi
                 final signToken = doc['sign_token'];
 
                 if (signToken != null) {
@@ -83,7 +121,7 @@ class FilePenolakanPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: const Text("Setuju & Hapus"),
+              child: const Text("Ya, Setuju"),
             ),
           ],
         );
@@ -105,7 +143,11 @@ class FilePenolakanPage extends StatelessWidget {
         itemBuilder: (itemContext, index) {
           final doc = documents[index];
           final originalName = doc['original_name'] ?? 'Dokumen Tanpa Nama';
-          final uploadDate = _formatDate(doc['uploaded_at']);
+
+          // --- AMBIL DATA DARI RESPONSE CONTROLLER ---
+          final requestedBy = doc['diminta_batal_oleh'] ?? 'N/A';
+          final reason = doc['alasan_pembatalan'] ?? '-';
+          // -------------------------------------------
 
           return Card(
             elevation: 2,
@@ -113,36 +155,74 @@ class FilePenolakanPage extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              leading: CircleAvatar(
-                backgroundColor: Colors.red.withOpacity(0.1),
-                child: const Icon(Icons.delete_forever, color: Colors.red),
-              ),
-              title: Text(
-                originalName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  'Diajukan: $uploadDate',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.red.withOpacity(0.1),
+                  child: const Icon(Icons.delete_forever, color: Colors.red),
                 ),
+                title: Text(
+                  originalName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+
+                // --- MODIFIKASI SUBTITLE UNTUK MENAMPILKAN ALASAN ---
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.person_outline,
+                          size: 14,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          "Oleh: $requestedBy",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        "Alasan: $reason",
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.black87,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+
+                // ----------------------------------------------------
+                trailing: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+                  ],
+                ),
+                onTap: () {
+                  _showConfirmationDialog(context, doc);
+                },
               ),
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: Colors.grey,
-              ),
-              onTap: () {
-                _showConfirmationDialog(context, doc);
-              },
             ),
           );
         },
@@ -160,8 +240,6 @@ class FilePenolakanPage extends StatelessWidget {
             children: [
               const SizedBox(height: 12),
               Expanded(
-                // --- PERBAIKAN 2: Ganti BlocBuilder dengan BlocConsumer ---
-                // BlocConsumer punya 'listener' untuk menampilkan SnackBar
                 child: BlocConsumer<RejectionBloc, RejectionState>(
                   listener: (context, state) {
                     if (state is RejectionActionSuccess) {
@@ -232,13 +310,13 @@ class FilePenolakanPage extends StatelessWidget {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Icon(
-                                      Icons.folder_off,
+                                      Icons.check_circle_outline,
                                       size: 64,
                                       color: Colors.grey,
                                     ),
                                     SizedBox(height: 16),
                                     Text(
-                                      'Tidak ada pengajuan penolakan.',
+                                      'Tidak ada permintaan pembatalan.',
                                       style: TextStyle(color: Colors.grey),
                                     ),
                                   ],
@@ -254,8 +332,6 @@ class FilePenolakanPage extends StatelessWidget {
                       );
                     }
 
-                    // Saat loading aksi (Success/Failure), kita bisa tampilkan loading
-                    // atau list kosong agar tidak blank
                     return const Center(child: CircularProgressIndicator());
                   },
                 ),
