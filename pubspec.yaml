@@ -44,6 +44,7 @@ dependencies:
   pdfx: ^2.9.2
   open_filex: ^4.7.0
   flutter_pdfview: ^1.4.0+1
+  signature: ^6.3.0
 
 
 dev_dependencies:

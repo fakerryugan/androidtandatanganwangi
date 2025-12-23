@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android/bottom_navbar/bottom_navbar.dart';
 import 'package:android/api/loginsystem.dart';
+import 'package:android/ttd/ttd.dart';
+
 
 class LoginmasukPage extends StatefulWidget {
   const LoginmasukPage({super.key});
@@ -50,11 +52,11 @@ class _LoginmasukPageState extends State<LoginmasukPage> {
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('token', token);
-      debugPrint("LOGIN BERHASIL. Pindah ke BottomNavBar...");
+      debugPrint("LOGIN BERHASIL. Pindah ke Halaman Tanda Tangan...");
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const MyBottomNavBar()),
+        MaterialPageRoute(builder: (context) => const SignaturePage()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
