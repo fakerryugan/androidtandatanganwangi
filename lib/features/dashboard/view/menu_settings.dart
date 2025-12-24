@@ -105,7 +105,6 @@ class _MenuSettingsState extends State<MenuSettings> {
                         ),
                         onTap: () {
                           // Panggil event dari LoginBloc
-                          context.read<LoginBloc>().add(LogoutRequested());
                         },
                       ),
                     ],

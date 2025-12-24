@@ -27,11 +27,6 @@ class PdfPickerHelper {
       // Pastikan backend mengirim key 'access_token' yang berisi UUID dokumen
       final String docToken = data['access_token'];
 
-      // 2. Pindah ke Halaman Viewer
-      // Kita TIDAK PERLU mengirim User Token lewat parameter,
-      // karena PdfViewerPage bisa mengambilnya sendiri lewat SharedPreferences jika butuh.
-      // Yang PENTING adalah mengirim docToken sebagai ID Dokumen.
-
       Navigator.push(
         context,
         MaterialPageRoute(

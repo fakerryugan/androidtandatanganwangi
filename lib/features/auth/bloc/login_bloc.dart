@@ -14,44 +14,17 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
   LoginBloc(this.repository) : super(LoginInitial()) {
     on<LoginRequested>((event, emit) async {
       emit(LoginLoading());
-      if (!await NetworkHelper.hasConnection()) {
-        emit(LoginFailure("Tidak ada koneksi internet"));
-        return;
-      }
-
       try {
-        final user = await repository.login(event.username, event.password);
-
-        await Future.wait([
-          StorageService.saveUser(jsonEncode(user!.toJson())),
-          FcmService.updateFcmToken(user.token),
-        ]);
-
-        emit(LoginSuccess(user));
-      } catch (e) {
-        emit(LoginFailure("Login gagal: ${e.toString()}"));
-      }
-    });
-
-    on<AppStarted>((event, emit) async {
-      final userJson = await StorageService.getUser();
-      if (userJson != null) {
-        final user = User.fromJson(
-          jsonDecode(userJson),
-          jsonDecode(userJson)['token'],
+        final user = await repository.syncSsoUser(
+          username: event.username,
+          password: event.password,
+          nama: event.nama,
+          nim: event.nim,
         );
-        emit(LoginSuccess(user));
-      } else {
-        emit(LoginInitial());
+        emit(LoginSuccess(user!));
+      } catch (e) {
+        emit(LoginFailure(e.toString()));
       }
-    });
-
-    on<LogoutRequested>((event, emit) async {
-      final userJson = await StorageService.getUser();
-      if (userJson != null) {
-        await Future.wait([FcmService.clearFcm(), StorageService.removeUser()]);
-      }
-      emit(LoginInitial());
     });
   }
 }
