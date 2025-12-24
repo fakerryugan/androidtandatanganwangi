@@ -76,14 +76,12 @@ class _SignaturePageState extends State<SignaturePage> {
         // 1. Background Gradient Biru (Sesuai Desain)
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
             colors: [
-              Color(0xFF81D4FA), // Biru muda bagian atas
-              Color(0xFF29B6F6), // Biru agak tua bagian bawah
-              Color(0xFFE1F5FE), // Fade ke putih/biru sangat muda di bawah
+              Color(0xFFA3DAF7), // Biru Langit
+              Color(0xFF6E8CF7),// Fade ke putih/biru sangat muda di bawah
             ],
-            stops: [0.0, 0.5, 1.0],
           ),
         ),
         child: SafeArea(
