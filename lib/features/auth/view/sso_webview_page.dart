@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 class SsoWebViewPage extends StatefulWidget {
-  final Function(String u, String p, String n, String nim) onLoginSuccess;
+  final Function(String u, String p, String n, String nim, String cookies) onLoginSuccess;
   const SsoWebViewPage({super.key, required this.onLoginSuccess});
 
   @override
@@ -25,6 +25,13 @@ class _SsoWebViewPageState extends State<SsoWebViewPage> {
       body: Stack(
         children: [
           InAppWebView(
+            initialSettings: InAppWebViewSettings(
+              // User Agent Desktop agar tampilan dashboard lengkap/standar
+              userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+              cacheEnabled: true,
+              javaScriptEnabled: true,
+              domStorageEnabled: true,
+            ),
             initialUrlRequest: URLRequest(
               url: WebUri("https://sit.poliwangi.ac.id/"),
             ),
@@ -35,12 +42,11 @@ class _SsoWebViewPageState extends State<SsoWebViewPage> {
             },
             onLoadStop: (controller, url) async {
               String currentUrl = url.toString();
-
-              // 1. Intersepsi Login (Support Click & Enter/Submit)
+              
+              // 1. Intersepsi Login (Tangkap Username/Pass saat user mengetik)
               if (currentUrl.contains("sso.poliwangi.ac.id/login")) {
                 await controller.evaluateJavascript(
                   source: """
-                  // Tangkap event saat form disubmit (misal via Enter)
                   var form = document.querySelector('form');
                   if(form) {
                     form.addEventListener('submit', function() {
@@ -49,8 +55,6 @@ class _SsoWebViewPageState extends State<SsoWebViewPage> {
                       window.flutter_inappwebview.callHandler('saveLogin', u, p);
                     });
                   }
-
-                  // Tangkap klik tombol manual (backup)
                   document.addEventListener('click', function(e) {
                     if(e.target.type == 'submit' || e.target.id == 'btn-login' || e.target.innerText.includes('Login')) {
                       var u = document.querySelector('input[name="username"]').value;
@@ -62,13 +66,18 @@ class _SsoWebViewPageState extends State<SsoWebViewPage> {
                 );
               }
 
-              // 2. Deteksi Dashboard (MHS/Dosen)
-              // Menambahkan 'dosen/profile/edit' sebagai tanda login berhasil untuk dosen
+              // 2. Deteksi Dashboard -> Mulai Scraping
+              // URL indikator dashboard user
               if (currentUrl.contains("mahasiswa/dashboard") ||
                   currentUrl.contains("dosen/dashboard") ||
                   currentUrl.contains("dosen/profile/edit")) {
-                setState(() => _isScraping = true);
-                _startScrapingTask(controller);
+                if (!_isScraping) {
+                   setState(() {
+                     _isScraping = true;
+                     _retryCount = 0; 
+                   });
+                   _startScrapingTask(controller);
+                }
               }
             },
             onWebViewCreated: (controller) {
@@ -99,11 +108,12 @@ class _SsoWebViewPageState extends State<SsoWebViewPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
-                    Text(
-                      _retryCount > 0
-                          ? "Mencoba mengambil data... ($_retryCount)"
-                          : "Sedang menyinkronkan identitas...",
-                    ),
+                    Text("Sedang mengambil data identitas... ($_retryCount)"),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () => setState(() => _isScraping = false),
+                      child: const Text("Batalkan"),
+                    )
                   ],
                 ),
               ),
@@ -114,78 +124,54 @@ class _SsoWebViewPageState extends State<SsoWebViewPage> {
   }
 
   void _startScrapingTask(InAppWebViewController controller) async {
-    // Logic Scraping yang lebih pintar: Cari berdasarkan Label "Nama" / "NIM" / "NIP"
-    var result = await controller.evaluateJavascript(
-      source: """
-      (function() {
-        var data = {};
-        
-        // Coba selector dashboard mahasiswa & dosen
-        // Mencari elemen dengan class .data-title (Label) dan .data-value (Isi)
-        // Biasanya ada di dalam container .data
-        
-        // Ambil semua container baris data (biasanya d-flex)
-        var rows = document.querySelectorAll('.data .d-flex');
-        
-        if(rows.length > 0) {
-           rows.forEach(function(row) {
-              var titleEl = row.querySelector('.data-title');
-              var valueEl = row.querySelector('.data-value');
-              
-              if (titleEl && valueEl) {
-                var rawKey = titleEl.innerText || "";
-                var val = valueEl.innerText || "";
-                
-                // Bersihkan titik dua dan spasi
-                var key = rawKey.replace(':', '').trim();
-                val = val.trim();
-                
-                // Mapping Key
-                if (key === 'NIM' || key === 'NIP' || key === 'NIDN') {
-                  data.id_val = val;
-                } else if (key === 'Nama') {
-                  data.nama = val;
-                }
-              }
-           });
-        }
-        
-        // Fallback scan manual jika struktur .d-flex berubah tapi class .data-value masih ada
-        // Ini kurang akurat tapi bisa jadi backup
-        if (!data.id_val || !data.nama) {
-           var d = document.querySelectorAll('.data-value');
-           if(d.length >= 2 && !data.id_val) {
-             // Asumsi index 0 = NIM/ID, index 1 = Nama (Logic lama)
-             // Hanya pakai ini jika logic label di atas gagal total
-             return { "id_val": d[0].innerText.trim(), "nama": d[1].innerText.trim() };
-           }
-        }
+    // REGEX SCRAPING: Ambil seluruh teks halaman body
+    var bodyText = await controller.evaluateJavascript(source: "document.body.innerText");
+    
+    if (bodyText != null && bodyText is String) {
+       // Regex cari NIM/NIP dan Nama
+       RegExp nimRegex = RegExp(r"(?:NIM|NIP|NIDN)\s*[:]\s*(\d+)", caseSensitive: false);
+       RegExp namaRegex = RegExp(r"Nama\s*[:]\s*([^\n\r]+)", caseSensitive: false);
+       
+       String? nimFound = nimRegex.firstMatch(bodyText)?.group(1)?.trim();
+       String? namaFound = namaRegex.firstMatch(bodyText)?.group(1)?.trim();
+       
+       if (nimFound != null && namaFound != null) {
+          print("SCRAPED DATA: $nimFound - $namaFound");
+          
+          if (mounted) {
+            // Strategi Shared Token: Tidak butuh Cookie!
+            // Kita percaya penuh bahwa jika webview sampai sini, user valid.
+            // Kirim data ke repository, nanti repo menyisipkan 'app_token' rahasia.
+            widget.onLoginSuccess(
+              savedUser ?? nimFound, 
+              savedPass ?? "",       
+              namaFound,
+              nimFound,
+              "", // Cookie string kosong, tidak dipakai backend shared token
+            );
+          }
+          return; 
+       }
+    }
 
-        if (data.id_val && data.nama) {
-          return data;
-        }
-        
-        return null;
-      })()
-    """,
-    );
-
-    if (result != null) {
-      widget.onLoginSuccess(
-        savedUser ?? result['id_val'],
-        savedPass ?? "",
-        result['nama'],
-        result['id_val'],
-      );
+    // Retry Logic
+    if (_retryCount < 8) {
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) {
+        setState(() => _retryCount++);
+        _startScrapingTask(controller);
+      }
     } else {
-      if (_retryCount < 10) {
-        await Future.delayed(const Duration(seconds: 1));
-        if (mounted) {
-          setState(() => _retryCount++);
-          _startScrapingTask(controller);
-        }
-      } else {
-        if (mounted) setState(() => _isScraping = false);
+      // Timeout
+      if (mounted) {
+          setState(() => _isScraping = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text("Gagal membaca data identitas. Coba reload."),
+              action: SnackBarAction(label: "Reload", onPressed: () => controller.reload()),
+              backgroundColor: Colors.red,
+            ),
+          );
       }
     }
   }

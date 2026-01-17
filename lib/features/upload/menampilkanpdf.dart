@@ -10,7 +10,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as pdf_lib;
 
-// Pastikan import ini sesuai dengan struktur project Anda
 import 'package:android/api/token.dart';
 import 'package:android/features/dashboard/view/dashboard_page.dart';
 
@@ -18,13 +17,15 @@ final GlobalKey<ScaffoldMessengerState> scaffoldMessengerKey = GlobalKey();
 
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
-  final String accessToken; // Menggunakan String Access Token
+  final String accessToken; 
+  final String? securityCode;
   final Map<String, dynamic>? qrData;
 
   const PdfViewerPage({
     super.key,
     required this.filePath,
     required this.accessToken,
+    this.securityCode,
     this.qrData,
   });
 
@@ -50,14 +51,13 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     null,
   );
 
-  // List untuk menyimpan QR yang sudah "disimpan/di-lock"
   List<Map<String, dynamic>> qrCodes = [];
 
   bool _isProcessing = false;
   bool _isSending = false;
 
   late String _currentPdfPath;
-  static const double _initialQrSize = 100.0;
+  static const double _initialQrSize = 150.0; // Ukuran awal lebih lebar
 
   @override
   void initState() {
@@ -176,9 +176,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     }
   }
 
-  // ==============================================================
-  // LOGIKA TAMBAH QR BARU (DIPERBAIKI)
-  // ==============================================================
   void _addNewQrCode() async {
     if (_activeQrNotifier.value != null) {
       scaffoldMessengerKey.currentState?.showSnackBar(
@@ -187,27 +184,21 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       return;
     }
 
-    // 1. Cek apakah ini tanda tangan pertama
-    // Jika qrCodes KOSONG, berarti ini yang PERTAMA -> Show Tujuan = TRUE
-    // Jika qrCodes TIDAK KOSONG, berarti ini KEDUA dst -> Show Tujuan = FALSE
     bool isFirstSignature = qrCodes.isEmpty;
-
-    // 2. Ambil halaman aktif dari PageController
     final int currentPageIndex = _pageController.page?.round() ?? 0;
     final int selectedPageNumber = currentPageIndex + 1;
 
-    // 3. Panggil Dialog
     final result = await showInputDialog(
       context: context,
       formKey: _formKey,
       nipController: nipController,
       tujuanController: tujuanController,
-      showTujuan: isFirstSignature, // Kirim status logic pertama/bukan
+      showTujuan: isFirstSignature, 
       totalPages: _pageImages.length,
-      accessToken: widget.accessToken, // Kirim Access Token
+      accessToken: widget.accessToken, 
+      securityCode: widget.securityCode,
     );
 
-    // 4. Proses Hasil
     if (result != null && result['sign_token'] != null) {
       Offset initialPosition;
 
@@ -218,7 +209,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
           boundary.top + (boundary.height / 2) - (_initialQrSize / 2),
         );
 
-        // Clamp agar tidak keluar batas
         initialPosition = Offset(
           initialPosition.dx.clamp(
             boundary.left,
@@ -239,8 +229,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
       _activeQrNotifier.value = {
         'sign_token': result['sign_token'],
-        'selected_page':
-            selectedPageNumber, // Set halaman berdasarkan halaman yg dilihat user
+        'selected_page': selectedPageNumber,
         'position': initialPosition,
         'size': _initialQrSize,
         'locked': false,
@@ -294,7 +283,9 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       final double pdfX = qrPositionOnUnscaledImage.dx * scaleFactor;
       final double pdfY = qrPositionOnUnscaledImage.dy * scaleFactor;
       final double qrSizeInPdf = qrSizeOnUnscaledImage * scaleFactor;
-      final double qrHeightInPdf = qrSizeInPdf * 0.6; // FIX RAPIO: 0.6 (Sama dengan UI)
+      
+      // Asumsi rasio landscape box 0.6
+      final double qrHeightInPdf = qrSizeInPdf * 0.6; 
 
       final Rect finalRect = Rect.fromLTWH(
         pdfX,
@@ -303,6 +294,15 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
         qrHeightInPdf, 
       );
 
+      // --- UPLOAD KOORDINAT PRESISI KE BACKEND ---
+      await updateSignaturePosition(
+         signToken: signToken,
+         page: pageIndex + 1, 
+         x: pdfX,
+         y: pdfY,
+      );
+
+      // --- EDIT PDF: GAMBAR KOTAK PLACEHOLDER (Bukan QR) ---
       final originalFileBytes = await File(_currentPdfPath).readAsBytes();
       final pdf_lib.PdfDocument document = pdf_lib.PdfDocument(
         inputBytes: originalFileBytes,
@@ -348,7 +348,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       await File(tempPath).rename(_currentPdfPath);
 
       setState(() {
-        // Tambahkan ke list qrCodes agar logika showTujuan berjalan benar
         qrCodes.add({...qrToSave, 'locked': true});
         _activeQrNotifier.value = null;
         _isLoadingPdf = true;
@@ -357,7 +356,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       await _loadAndConvertPdf();
 
       scaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(content: Text('QR berhasil disimpan!')),
+        const SnackBar(content: Text('Posisi Tanda Tangan Tersimpan!')),
       );
     } catch (e) {
       scaffoldMessengerKey.currentState?.showSnackBar(
@@ -372,7 +371,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     try {
       setState(() => _isSending = true);
 
-      // PANGGIL FUNGSI DARI API YANG BARU DIPERBAIKI
       await replaceDocument(
         accessToken: widget.accessToken,
         filePath: _currentPdfPath,
@@ -406,7 +404,6 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 
       if (token == null) throw Exception("Token tidak ditemukan");
 
-      // Menggunakan widget.accessToken
       final url = Uri.parse('$baseUrl/documents/cancel/${widget.accessToken}');
       final response = await http.post(
         url,
@@ -480,7 +477,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       key: scaffoldMessengerKey,
       appBar: AppBar(
         title: const Text(
-          'Edit & Tanda Tangan',
+          'Tentukan Posisi Tanda Tangan',
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: const Color(0xFF172B4C),
@@ -639,11 +636,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                   side: const BorderSide(color: Colors.black, width: 2),
                 ),
                 label: Text(
-                  hasActiveQr ? 'Simpan Posisi QR' : 'Tanda Tangan',
+                  hasActiveQr ? 'Simpan Posisi' : 'Tambah Area TTD',
                   style: const TextStyle(color: Colors.black),
                 ),
                 icon: Icon(
-                  hasActiveQr ? Icons.save : Icons.add,
+                  hasActiveQr ? Icons.save_as : Icons.add_box_outlined,
                   color: Colors.black,
                 ),
               ),
@@ -656,7 +653,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
 }
 
 // ==========================================================
-// CLASS RESIZABLE QR CODE
+// CLASS RESIZABLE SIGNATURE PLACEHOLDER (Dulu QR Code)
 // ==========================================================
 class ResizableQrCode extends StatefulWidget {
   final Map<String, dynamic> qrData;
@@ -717,54 +714,55 @@ class _ResizableQrCodeState extends State<ResizableQrCode> {
         child: Stack(
           alignment: Alignment.center,
           children: [
+            // BOX VISUAL: AREA TANDA TANGAN (Bukan QR)
             Container(
               width: _size,
-              height: _size * 0.6, // Ratio landscape
+              height: _size * 0.6, // Ratio landscape kotak tanda tangan
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.blueAccent, width: 2),
+                border: Border.all(color: Colors.blueAccent, width: 2, style: BorderStyle.none), // Putus-putus manual (Flutter border doesn't support dashed native easily, using solid blue for now to test)
+                // Use a Dashed Border Painter if needed, but solid blue box is clearly a zone.
                 borderRadius: BorderRadius.circular(8),
                 color: Colors.blue.withOpacity(0.15),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                   Icon(Icons.edit_square, size: _size * 0.25, color: Colors.blue),
-                   SizedBox(height: 5),
-                   Text(
-                    "AREA TANDA TANGAN",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: _size * 0.1, 
-                      fontWeight: FontWeight.bold, 
-                      color: Colors.blue[900]
+              child: DottedBorderPainter( // Custom widget if needed, or just container
+                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                     Icon(Icons.edit_square, size: _size * 0.25, color: Colors.blue),
+                     SizedBox(height: 5),
+                     Text(
+                      "AREA TANDA TANGAN",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: _size * 0.1, fontWeight: FontWeight.bold, color: Colors.blue[900]),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
+            
             Positioned(
-              right: -10,
-              bottom: -10,
+              right: -5,
+              bottom: -5,
               child: GestureDetector(
                 onPanUpdate: (details) {
                   setState(() {
                     final newSize =
                         _size + (details.delta.dx + details.delta.dy) / 2;
-                    _size = newSize.clamp(50.0, 300.0);
+                    _size = newSize.clamp(100.0, 400.0);
                   });
                   widget.onResizeUpdate(_size);
                 },
                 child: Container(
-                  width: 24,
-                  height: 24,
+                  width: 30,
+                  height: 30,
                   decoration: const BoxDecoration(
                     color: Colors.blue,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.zoom_out_map,
+                    Icons.aspect_ratio,
                     color: Colors.white,
-                    size: 16,
+                    size: 18,
                   ),
                 ),
               ),
@@ -776,6 +774,18 @@ class _ResizableQrCodeState extends State<ResizableQrCode> {
   }
 }
 
-// ==========================================================
-// DIALOG INPUT (DIPERBAIKI)
-// ==========================================================
+// Widget Pembantu untuk Border Putus-Putus Sederhana (Fake)
+class DottedBorderPainter extends StatelessWidget {
+  final Widget child;
+  const DottedBorderPainter({required this.child});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+          border: Border.all(color: Colors.blue, width: 2), // Fallback solid
+          borderRadius: BorderRadius.circular(8),
+      ),
+      child: child,
+    );
+  }
+}

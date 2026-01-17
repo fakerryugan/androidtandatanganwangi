@@ -20,11 +20,18 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
           password: event.password,
           nama: event.nama,
           nim: event.nim,
+          cookies: event.cookies,
         );
         emit(LoginSuccess(user!));
       } catch (e) {
         emit(LoginFailure(e.toString()));
       }
+    });
+
+    on<LogoutRequested>((event, emit) async {
+      emit(LoginLoading());
+      await repository.logout();
+      emit(LogoutSuccess());
     });
   }
 }

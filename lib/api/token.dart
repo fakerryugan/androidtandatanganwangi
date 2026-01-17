@@ -50,15 +50,15 @@ Future<List<Map<String, dynamic>>> fetchCompletedDocuments() async {
   final prefs = await SharedPreferences.getInstance();
   final token = prefs.getString(
     'auth_token',
-  ); // Sesuaikan dengan key token Anda
+  ); 
 
   if (token == null) {
     print('Token tidak ditemukan');
-    return []; // Kembalikan list kosong jika tidak ada token
+    return []; 
   }
 
   final response = await http.get(
-    Uri.parse('$baseUrl/documents/completed'), // Menggunakan endpoint baru
+    Uri.parse('$baseUrl/documents/completed'), 
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
@@ -67,9 +67,7 @@ Future<List<Map<String, dynamic>>> fetchCompletedDocuments() async {
 
   if (response.statusCode == 200) {
     final data = json.decode(response.body);
-    // Pastikan data['documents'] adalah List
     if (data['status'] == true && data['documents'] is List) {
-      // Konversi List<dynamic> ke List<Map<String, dynamic>>
       return List<Map<String, dynamic>>.from(data['documents']);
     } else {
       print('Format data tidak sesuai atau status false');
@@ -78,7 +76,6 @@ Future<List<Map<String, dynamic>>> fetchCompletedDocuments() async {
   } else {
     print('Gagal memuat dokumen: ${response.statusCode}');
     print('Response body: ${response.body}');
-    // Gagal memuat data, kembalikan list kosong
     return [];
   }
 }
@@ -105,7 +102,7 @@ Future<http.Response?> downloadDocument(
 }
 
 Future<Map<String, dynamic>> uploadDocument(File file) async {
-  final token = await getToken(); // Token Login User
+  final token = await getToken(); 
   if (token == null) throw Exception('Token tidak ditemukan');
 
   try {
@@ -115,21 +112,25 @@ Future<Map<String, dynamic>> uploadDocument(File file) async {
       ..files.add(await http.MultipartFile.fromPath('file', file.path));
 
     var response = await request.send();
-    final responseBody = await response.stream.bytesToString();
+    final responseBody = await response.stream.bytesToString(); 
+    
+    // Debug
+    print("Upload Response Code: ${response.statusCode}");
+    print("Upload Response Body: $responseBody");
+
     final data = json.decode(responseBody);
 
     if (response.statusCode == 200) {
-      // PERBAIKAN: API Laravel mengembalikan key 'access_token', bukan 'document_id'
       if (data['access_token'] != null) {
-        // Simpan token dokumen ini (bisa digunakan sebagai ID dokumen sementara)
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('current_document_token', data['access_token']);
       }
 
       return {
         'success': true,
-        // Kita kembalikan access_token karena ini satu-satunya ID yang dikasih server
         'access_token': data['access_token'],
+        'security_code': data['security_code'] ?? 'SECURE123', // Fallback sementara
+        'verification_url': data['verification_url'] ?? 'https://fakerryugan.my.id/verify/${data['access_token']}',
         'message': data['message'] ?? 'Upload berhasil',
       };
     } else {
@@ -143,16 +144,18 @@ Future<Map<String, dynamic>> uploadDocument(File file) async {
 }
 
 Future<Map<String, dynamic>> uploadSigner({
-  required String accessToken, // Ini adalah Token Dokumen (UUID)
+  required String accessToken, 
   required String nip,
   String? alasan,
+  String? securityCode,
 }) async {
-  final token = await getToken(); // Ini Token Login User
+  final token = await getToken(); 
   if (token == null) throw Exception('Token tidak ditemukan');
 
   try {
-    // URL sudah benar menggunakan accessToken dokumen
+    // Debug URL
     final url = Uri.parse('$baseUrl/documents/$accessToken/signer');
+    print("Adding Signer URL: $url");
 
     final headers = {
       'Authorization': 'Bearer $token',
@@ -160,17 +163,26 @@ Future<Map<String, dynamic>> uploadSigner({
       'Content-Type': 'application/json',
     };
 
-    // PERBAIKAN: Key harus 'tujuan' sesuai dengan $request->tujuan di Laravel
     final body = {
       'nip': nip,
-      if (alasan != null) 'tujuan': alasan, // Ubah key 'alasan' jadi 'tujuan'
+      if (alasan != null) 'tujuan': alasan,
+      // FIX 422: Backend mewajibkan data posisi awal
+      'page': 1,
+      'x_pos': 0,
+      'y_pos': 0,
+      if (securityCode != null) 'security_code': securityCode,
     };
+
+    print("Adding Signer Body: $body");
 
     final response = await http.post(
       url,
       headers: headers,
       body: jsonEncode(body),
     );
+
+    print("Adding Signer Response Code: ${response.statusCode}");
+    print("Adding Signer Response Body: ${response.body}");
 
     final responseData = json.decode(response.body);
 
@@ -182,26 +194,68 @@ Future<Map<String, dynamic>> uploadSigner({
         'message': 'Penandatangan berhasil ditambahkan',
       };
     } else {
-      // Handle jika user sudah ada (409) atau error lain
-      throw Exception(
-        responseData['message'] ?? 'Gagal menambahkan penandatangan',
-      );
+      final msg = responseData['message'] ?? 'Gagal menambahkan penandatangan';
+      throw Exception("$msg (Error ${response.statusCode})");
     }
   } catch (e) {
     throw Exception('Error adding signer: ${e.toString()}');
   }
 }
 
+
+// FUNGSI BARU: Update Posisi Tanda Tangan
+Future<void> updateSignaturePosition({
+  required String signToken,
+  required int page,
+  required double x,
+  required double y,
+}) async {
+  final token = await getToken();
+  if (token == null) throw Exception('Token tidak ditemukan');
+
+  try {
+    // Sesuaikan endpoint Laravel Anda
+    final url = Uri.parse('$baseUrl/documents/signer/update-position');
+    
+    final body = {
+      'sign_token': signToken,
+      'page': page,
+      'x_position': x,
+      'y_position': y,
+    };
+
+    // Debug
+    print("Update Position Body: $body");
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+
+   print("Update Position Response: ${response.statusCode} - ${response.body}");
+
+    if (response.statusCode != 200) {
+      throw Exception('Gagal update posisi: ${response.body}');
+    }
+  } catch (e) {
+    print('Error update position: $e');
+  }
+}
+
+
 Future<Map<String, dynamic>> replaceDocument({
-  required String accessToken, // UBAH: Gunakan String Access Token
+  required String accessToken, 
   required String filePath,
 }) async {
   final token = await getToken();
   if (token == null) throw Exception('Token tidak ditemukan');
 
   try {
-    // Pastikan URL endpoint sesuai dengan route Laravel Anda
-    // Biasanya: /api/documents/replace/{accessToken}
     var uri = Uri.parse('$baseUrl/documents/replace/$accessToken');
 
     var request = http.MultipartRequest('POST', uri)
@@ -225,7 +279,7 @@ Future<Map<String, dynamic>> replaceDocument({
         'success': true,
         'message': data['message'] ?? 'Dokumen berhasil dikirim!',
         'document_id':
-            data['document_id'], // Opsional, jika backend mengembalikan ID
+            data['document_id'], 
       };
     } else {
       throw Exception(data['message'] ?? 'Gagal mengirim dokumen');

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/token.dart';
-import 'menampilkanpdf.dart';
+import '../features/upload/menampilkanpdf.dart';
 
 class PdfPickerHelper {
   static Future<void> pickAndOpenPdf(BuildContext context) async {
@@ -23,17 +23,19 @@ class PdfPickerHelper {
       // 1. Upload Document
       final data = await uploadDocument(file);
 
-      // Ambil Access Token DOKUMEN (UUID)
-      // Pastikan backend mengirim key 'access_token' yang berisi UUID dokumen
+      // Ambil Access Token DOKUMEN (UUID) & Security Code
       final String docToken = data['access_token'];
-
+      final String? securityCode = data['security_code'];
+      
+      // NOTE: QR Footer & Tanda Tangan akan ditempel oleh BACKEND setelah selesai.
+      
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => PdfViewerPage(
-            filePath: file.path,
-            accessToken:
-                docToken, // <--- PERBAIKAN: Kirim UUID Dokumen, BUKAN User Token
+            filePath: file.path, 
+            accessToken: docToken, 
+            securityCode: securityCode,
           ),
         ),
       );
@@ -41,6 +43,8 @@ class PdfPickerHelper {
       _showMessage(context, 'Upload gagal: $e');
     }
   }
+
+
 
   static void _showMessage(BuildContext context, String message) {
     ScaffoldMessenger.of(

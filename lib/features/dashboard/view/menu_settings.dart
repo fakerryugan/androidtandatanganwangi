@@ -21,10 +21,11 @@ class _MenuSettingsState extends State<MenuSettings> {
     // Asumsi LoginBloc disediakan di atas DashboardPage (misal di main.dart)
     return BlocListener<LoginBloc, LoginState>(
       listener: (context, state) {
-        if (state is LogoutSuccess || state is LoginInitial) {
-          Navigator.pushReplacement(
-            context,
+        if (state is LogoutSuccess) {
+          // Navigasi ke Login Page dan hapus semua stack route
+          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const LoginPage()),
+            (route) => false,
           );
         }
       },
@@ -104,7 +105,8 @@ class _MenuSettingsState extends State<MenuSettings> {
                           ),
                         ),
                         onTap: () {
-                          // Panggil event dari LoginBloc
+                          // Panggil request logout
+                          context.read<LoginBloc>().add(LogoutRequested());
                         },
                       ),
                     ],

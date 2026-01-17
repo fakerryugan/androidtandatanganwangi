@@ -8,8 +8,7 @@ Future<Map<String, dynamic>?> showInputDialog({
   required TextEditingController tujuanController,
   required bool showTujuan, // Parameter penentu visible
   required int totalPages,
-  required String accessToken, 
-  String? securityCode,
+  required String accessToken, // <-- String Access Token
 }) async {
   return showDialog<Map<String, dynamic>>(
     context: context,
@@ -86,7 +85,6 @@ Future<Map<String, dynamic>?> showInputDialog({
                       accessToken: accessToken,
                       nip: nip,
                       alasan: alasan,
-                      securityCode: securityCode,
                     );
 
                     Navigator.pop(context, {

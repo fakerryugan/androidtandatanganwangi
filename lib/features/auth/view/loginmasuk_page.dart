@@ -83,9 +83,9 @@ class LoginmasukPage extends StatelessWidget {
                                 context,
                                 MaterialPageRoute(
                                   builder: (ctx) => SsoWebViewPage(
-                                    onLoginSuccess: (u, p, n, nim) {
+                                    onLoginSuccess: (u, p, n, nim, cookies) {
                                       context.read<LoginBloc>().add(
-                                        LoginRequested(u, p, nama: n, nim: nim),
+                                        LoginRequested(u, p, nama: n, nim: nim, cookies: cookies),
                                       );
                                       Navigator.pop(ctx);
                                     },
